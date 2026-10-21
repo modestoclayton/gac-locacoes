@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>GAC Locações</title>
 <meta name="theme-color" content="#1f4fa3">
+<meta name="app-version" content="4">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="GAC Locações">
@@ -921,6 +922,12 @@ $('#lgCriar').onclick=async()=>{const st=$('#lgStatus'),email=$('#lg_email').val
   const{data,error}=await sb.auth.signInWithPassword({email,password:pw});
   if(error){st.className='status err';st.textContent=traduz(error.message);return}st.textContent='';showApp(data.session)};
 $('#btnSair').onclick=async()=>{await sb.auth.signOut();location.reload()};
+
+/* ---------- atualização automática ---------- */
+const APP_V=document.querySelector('meta[name="app-version"]').content;
+async function checaVersao(){try{const t=await (await fetch('./index.html?nc='+Date.now(),{cache:'no-store'})).text();
+  const m=t.match(/name="app-version" content="([^"]+)"/);if(m&&m[1]!==APP_V)location.replace('./?v='+m[1])}catch(e){}}
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)checaVersao()});setTimeout(checaVersao,1500);
 
 /* ---------- início ---------- */
 (function init(){
