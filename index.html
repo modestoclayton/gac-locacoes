@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>GAC Locações</title>
 <meta name="theme-color" content="#1f4fa3">
-<meta name="app-version" content="4">
+<meta name="app-version" content="5">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="GAC Locações">
@@ -163,6 +163,10 @@ a.btn{text-decoration:none;display:inline-block}
 .sect{font:600 13px var(--f-body);text-transform:uppercase;letter-spacing:.1em;color:var(--muted);margin:8px 0 0}
 .empty{background:var(--panel);border:1.5px dashed var(--line);border-radius:10px;padding:24px;color:var(--muted)}
 .fx{display:grid;gap:4px;min-width:0}
+#tabs button.fixo{display:none}
+.ldfix{display:flex;align-items:center;gap:10px;flex-wrap:wrap;border:1px solid var(--line);background:var(--bg);border-radius:8px;padding:10px 12px;font-size:14px}
+.ldfix small{display:block;color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.08em}
+.ldfix div{flex:1;min-width:180px}
 .cnhprev{max-width:220px;border-radius:6px;border:1px solid var(--line)}
 @media (prefers-reduced-motion:no-preference){.steps button,.card,.chip{transition:background .15s,border-color .15s}}
 </style>
@@ -227,6 +231,7 @@ a.btn{text-decoration:none;display:inline-block}
 
       <!-- 2 CLIENTE -->
       <div class="step" data-step="1" hidden>
+        <div class="ldfix" id="ldResumo" hidden><div><small>Locador</small><b id="ldResumoNome"></b></div><button type="button" class="btn small" id="ldEditar">Alterar locador</button></div>
         <h2>Dados do cliente (locatário)</h2>
         <fieldset>
           <legend>Identificação</legend>
@@ -604,11 +609,14 @@ function stepDone(i){
 }
 
 /* ---------- etapas ---------- */
+function ldFixo(){return !!(val('ld_nome')&&val('ld_doc')&&val('ld_end'))}
+function atualizaLd(){const f=ldFixo();$('#tabs button[data-s="0"]').classList.toggle('fixo',f&&step!==0);$('#ldResumo').hidden=!f;$$('#tabs button').forEach((b,i)=>{const n=b.querySelector('.n');if(n)n.textContent=(f&&step!==0)?i:i+1});$('#ldResumoNome').textContent=val('ld_nome')+(val('ld_doc')?' · CPF '+val('ld_doc'):'')}
 function go(i){
   step=Math.max(0,Math.min(4,i));
   $$('.step').forEach(s=>s.hidden=+s.dataset.step!==step);
   $$('#tabs button').forEach((b,k)=>b.setAttribute('aria-selected',k===step));
-  $('#prev').disabled=step===0;
+  setTimeout(atualizaLd,0);
+  $('#prev').disabled=step===0||(step===1&&ldFixo());
   $('#next').hidden=step===4;
   if(step===4)setTimeout(()=>{sizePads()},0);
   $('#tabs').scrollIntoView({block:'nearest',behavior:'smooth'});
@@ -871,7 +879,7 @@ const VF=['v_modelo','v_ano','v_placa','v_cor','v_comb','v_renavam','v_chassi','
 const FROTA_INICIAL=[{v_modelo:'Chevrolet Corsa 1.4',v_ano:'2012/2012',v_placa:'AUC3C73',v_cor:'Preta',v_comb:'Flex (álcool/gasolina)',v_renavam:'',v_chassi:'',v_valor:''}];
 let frotaCache=null;
 async function loadConfig(){try{
-  const l=await db.doc('config/locador').get();if(l.exists){const d=l.data();LD_FIELDS.forEach(id=>{if(d[id])$('#'+id).value=d[id]});render()}
+  const l=await db.doc('config/locador').get();if(l.exists){const d=l.data();LD_FIELDS.forEach(id=>{if(d[id])$('#'+id).value=d[id]});render();if(step===0&&ldFixo())go(1);else atualizaLd()}
   else{const o={};LD_FIELDS.forEach(k=>o[k]=val(k));if(o.ld_nome)await db.doc('config/locador').set(o)}
   const f=await db.doc('config/frota').get();const li=f.exists?f.data().lista:null;
   if(Array.isArray(li)&&li.length){frotaCache=cloneJ(li);renderFrota()}else await db.doc('config/frota').set({lista:getFrota()});
@@ -934,7 +942,8 @@ document.addEventListener('visibilitychange',()=>{if(!document.hidden)checaVersa
   const t=new Date(),iso=d=>d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
   $('#d_ini').value=iso(t);$('#p_1venc').value=iso(t);
   const f=new Date(t);f.setMonth(f.getMonth()+1);$('#d_fim').value=iso(f);
-  loadDraft();render();renderFrota();go(0);
+  loadDraft();render();renderFrota();go(ldFixo()?1:0);
+  $('#ldEditar').onclick=()=>go(0);
   sb.auth.getSession().then(({data})=>{if(data.session)showApp(data.session);else showLogin()});
 })();
 </script>
