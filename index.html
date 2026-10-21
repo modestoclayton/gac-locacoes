@@ -270,6 +270,7 @@ a.btn{text-decoration:none;display:inline-block}
           <div class="f s3"><label for="v_renavam">RENAVAM</label><input id="v_renavam" inputmode="numeric"></div>
           <div class="f s3"><label for="v_chassi">Chassi</label><input id="v_chassi"></div>
           <div class="f s2"><label for="v_valor">Valor de referência (FIPE)</label><input id="v_valor" inputmode="decimal" placeholder="R$"></div>
+          <div class="f s6"><label for="v_rastreador">Link do rastreador (opcional)</label><input id="v_rastreador" type="url" inputmode="url" placeholder="Cole aqui o link de rastreamento deste carro"></div>
           <div class="f s6" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><button type="button" class="btn small primary" id="btnSalvarV">Salvar na frota</button><span class="status" id="vStatus"></span></div>
         </fieldset>
         <fieldset>
@@ -739,7 +740,7 @@ $('#btnNovo').onclick=()=>{$('#confirmNovo').hidden=false};
 $('#novoNao').onclick=()=>{$('#confirmNovo').hidden=true};
 $('#novoSim').onclick=()=>{
   const keep={};LD_FIELDS.forEach(id=>keep[id]=val(id));
-  const veic=['v_modelo','v_ano','v_placa','v_cor','v_comb','v_renavam','v_chassi','v_valor'].reduce((a,id)=>(a[id]=val(id),a),{});
+  const veic=['v_modelo','v_ano','v_placa','v_cor','v_comb','v_renavam','v_chassi','v_valor','v_rastreador'].reduce((a,id)=>(a[id]=val(id),a),{});
   $('#form').reset();Object.entries({...keep,...veic}).forEach(([k,v])=>$('#'+k).value=v);
   cnhData=null;$('#cnhPrev').hidden=true;for(const k in pads){const p=pads[k];p.ctx.clearRect(0,0,p.cv.width,p.cv.height);p.empty=true}
   $('#confirmNovo').hidden=true;$('#status').textContent='';render();go(1);
@@ -807,6 +808,8 @@ function renderPag(){
   const b=$('#lateBadge');b.hidden=!nAtr;b.textContent=nAtr;
   const card=([id,c])=>{const isB=busy.has(id),dis=isB?' disabled':'';const ativo=c.status!=='encerrado';
     let h=`<article class="ct"><header><span class="mini">${esc(c.veiculo?.placa||'')}</span><div class="who"><b>${esc(c.cliente?.nome||'Cliente sem nome')}</b><small>${esc(c.veiculo?.modelo||'')} · ${fds(c.inicio)||'—'} a ${fds(c.fim)||'—'} · ${brl(c.semanal)||'—'}/semana${c.entrega?.km!=null?' · saída '+kmF(c.entrega.km):''}${ativo?'':' · devolvido em '+fds(c.encerradoEm)}</small></div><div class="pacts">`;
+    const tr=linkRastreador(c.veiculo?.placa);
+    if(ativo&&tr)h+=`<a class="btn small wa" href="${esc(tr)}" target="_blank" rel="noopener">Ver no mapa</a>`;
     if(ativo)h+=`<button class="btn small" data-act="renovar" data-id="${id}"${dis}>Renovar +1 mês</button><button class="btn small" data-act="ask-enc" data-id="${id}"${dis}>Devolução</button>`;
     else h+=`<button class="btn small danger" data-act="ask-del" data-id="${id}"${dis}>Excluir</button>`;
     h+=`</div></header>`;
@@ -862,7 +865,8 @@ $('#vNovo').onclick=()=>showView('novo');$('#vPag').onclick=()=>showView('pag');
 
 /* ---------- frota ---------- */
 const KEY_FROTA='gac_frota_v1';
-const VF=['v_modelo','v_ano','v_placa','v_cor','v_comb','v_renavam','v_chassi','v_valor'];
+function linkRastreador(placa){const v=getFrota().find(x=>(x.v_placa||'').toUpperCase()===(placa||'').toUpperCase());const u=(v?.v_rastreador||'').trim();return /^https?:\/\//i.test(u)?u:null}
+const VF=['v_modelo','v_ano','v_placa','v_cor','v_comb','v_renavam','v_chassi','v_valor','v_rastreador'];
 const FROTA_INICIAL=[{v_modelo:'Chevrolet Corsa 1.4',v_ano:'2012/2012',v_placa:'AUC3C73',v_cor:'Preta',v_comb:'Flex (álcool/gasolina)',v_renavam:'',v_chassi:'',v_valor:''}];
 let frotaCache=null;
 async function loadConfig(){try{
@@ -873,10 +877,10 @@ async function loadConfig(){try{
 }catch(e){}}
 let ldTimer;LD_FIELDS.forEach(id=>$('#'+id).addEventListener('input',()=>{clearTimeout(ldTimer);ldTimer=setTimeout(()=>{if(!db)return;const o={};LD_FIELDS.forEach(k=>o[k]=val(k));db.doc('config/locador').set(o).catch(()=>{})},1500)}));
 function getFrota(){if(frotaCache)return cloneJ(frotaCache);try{const f=JSON.parse(localStorage.getItem(KEY_FROTA)||'null');if(Array.isArray(f)&&f.length)return f}catch(e){}return FROTA_INICIAL.map(v=>({...v}))}
-function setFrota(f){frotaCache=cloneJ(f);try{localStorage.setItem(KEY_FROTA,JSON.stringify(f))}catch(e){}if(db)db.doc('config/frota').set({lista:f}).catch(()=>{})}
+function setFrota(f){frotaCache=cloneJ(f);setTimeout(()=>{try{renderPag()}catch(e){}},0);try{localStorage.setItem(KEY_FROTA,JSON.stringify(f))}catch(e){}if(db)db.doc('config/frota').set({lista:f}).catch(()=>{})}
 function renderFrota(){
   const f=getFrota(),cur=val('v_placa').toUpperCase();
-  $('#fleet').innerHTML=f.map((v,i)=>`<button type="button" class="vcard" data-i="${i}" aria-pressed="${v.v_placa.toUpperCase()===cur}"><span class="mini">${esc(v.v_placa.toUpperCase())}</span><b>${esc(v.v_modelo)}</b><small>${esc(v.v_cor)} · ${esc(v.v_ano)}</small></button>`).join('')+`<button type="button" class="vcard add" id="addV">+ Cadastrar veículo</button>`;
+  $('#fleet').innerHTML=f.map((v,i)=>`<button type="button" class="vcard" data-i="${i}" aria-pressed="${v.v_placa.toUpperCase()===cur}"><span class="mini">${esc(v.v_placa.toUpperCase())}</span><b>${esc(v.v_modelo)}</b><small>${esc(v.v_cor)} · ${esc(v.v_ano)}${/^https?:/i.test(v.v_rastreador||'')?' · com rastreador':''}</small></button>`).join('')+`<button type="button" class="vcard add" id="addV">+ Cadastrar veículo</button>`;
   $$('#fleet .vcard[data-i]').forEach(b=>b.onclick=()=>{const v=getFrota()[+b.dataset.i];VF.forEach(id=>$('#'+id).value=v[id]||'');$('#vStatus').textContent='';render();renderFrota()});
   $('#addV').onclick=()=>{VF.forEach(id=>$('#'+id).value='');$('#v_comb').value='Flex (álcool/gasolina)';$('#vStatus').className='status';$('#vStatus').textContent='Preencha os dados e toque em Salvar na frota.';render();renderFrota();$('#v_modelo').focus()};
 }
