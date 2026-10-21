@@ -43,7 +43,14 @@ img{max-width:100%}
 body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:15px;line-height:1.45;
   padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:20px 48px}
 .wrap{max-width:1240px;margin:0 auto;display:grid;gap:20px}
-header.top{display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+header.top{display:grid;gap:14px}
+.brandrow{display:flex;align-items:center;gap:12px;min-width:0}
+.brandrow .plate{min-width:0;flex:none}
+.brandrow .plate .num{font-size:22px;padding:3px 10px}
+.brandrow .brand{display:grid;gap:2px;line-height:1.1;min-width:0}
+.brandrow .brand span{color:var(--muted);font-size:11px;letter-spacing:.16em}
+.titles{display:grid;gap:4px}
+@media (max-width:560px){#acctEmail{display:none}h1{font-size:28px}}
 .plate{display:inline-flex;flex-direction:column;border:2px solid var(--ink);border-radius:6px;overflow:hidden;background:#fff;color:#111;min-width:150px}
 .plate .band{background:#1f4fa3;color:#fff;font:600 10px/1 var(--f-body);letter-spacing:.12em;padding:4px 8px;display:flex;justify-content:space-between}
 .plate .num{font:600 28px/1.1 var(--f-mono);letter-spacing:.08em;text-align:center;padding:4px 10px}
@@ -174,13 +181,15 @@ a.btn{text-decoration:none;display:inline-block}
 
 <div class="wrap" id="app" hidden>
   <header class="top">
-    <div class="plate" aria-hidden="true"><div class="band"><span>BRASIL</span><span>BR</span></div><div class="num" id="plateNum">AUC3C73</div></div>
-    <div style="flex:1;min-width:200px">
-      <p class="brand">GAC Locações de Veículos</p>
+    <div class="brandrow">
+      <div class="plate" aria-hidden="true"><div class="band"><span>BRASIL</span><span>BR</span></div><div class="num" id="plateNum">AUC3C73</div></div>
+      <p class="brand">GAC Locações<span>de Veículos</span></p>
+      <div class="acct"><span id="acctEmail"></span><button type="button" class="btn small" id="btnSair">Sair</button></div>
+    </div>
+    <div class="titles">
       <h1>Contrato de Locação</h1>
       <p class="sub">Escolha o carro, preencha o cliente e as condições, colete as assinaturas e gere o PDF.</p>
     </div>
-    <div class="acct"><span id="acctEmail"></span><button type="button" class="btn small" id="btnSair">Sair</button></div>
   </header>
 
   <div class="views" role="tablist">
