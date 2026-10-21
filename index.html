@@ -1,0 +1,922 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>GAC Locações</title>
+<meta name="theme-color" content="#1f4fa3">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="GAC Locações">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="robots" content="noindex,nofollow">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" type="image/png" href="icon-192.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&family=IBM+Plex+Mono:wght@500;600&display=swap">
+<script src="lib/jspdf.umd.min.js"></script>
+<script src="lib/supabase.js"></script>
+<style>
+/* Layout: formulário em etapas à esquerda, contrato vivo à direita (empilha no celular). Faixa azul da placa Mercosul como fio condutor. */
+:root{
+  --bg:#eef1f5; --panel:#ffffff; --ink:#16202c; --muted:#5b6878; --line:#d5dce5;
+  --accent:#1f4fa3; --accent-ink:#ffffff; --accent-soft:#e3ebf8; --warn:#b4570c; --ok:#1d7a4a; --paper:#fffefb; --late:#c2341f; --late-soft:#fbe9e6;
+  --f-display:"Barlow Condensed","Arial Narrow",Arial,sans-serif;
+  --f-body:"Barlow","Segoe UI",Arial,sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#0f141b; --panel:#171e28; --ink:#e6ebf2; --muted:#93a0b2; --line:#2a3543;
+  --accent:#5b8ee6; --accent-ink:#0b1220; --accent-soft:#1c2a40; --warn:#e59b52; --ok:#5cc38c; --paper:#1b222d; --late:#ff7a66; --late-soft:#3a1d1a; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0f141b; --panel:#171e28; --ink:#e6ebf2; --muted:#93a0b2; --line:#2a3543;
+  --accent:#5b8ee6; --accent-ink:#0b1220; --accent-soft:#1c2a40; --warn:#e59b52; --ok:#5cc38c; --paper:#1b222d; --late:#ff7a66; --late-soft:#3a1d1a; color-scheme:dark}
+*{box-sizing:border-box}
+html{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+[hidden]{display:none!important}
+img{max-width:100%}
+.login{max-width:400px;margin:8vh auto 0;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:24px;display:grid;gap:14px}
+.login h1{font-size:30px}
+.acct{margin-left:auto;display:flex;gap:8px;align-items:center;font-size:13px;color:var(--muted);flex-wrap:wrap}
+.acessos{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px;display:grid;gap:10px}
+.acessos ul{margin:0;padding-left:18px}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:15px;line-height:1.45;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:20px 48px}
+.wrap{max-width:1240px;margin:0 auto;display:grid;gap:20px}
+header.top{display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+.plate{display:inline-flex;flex-direction:column;border:2px solid var(--ink);border-radius:6px;overflow:hidden;background:#fff;color:#111;min-width:150px}
+.plate .band{background:#1f4fa3;color:#fff;font:600 10px/1 var(--f-body);letter-spacing:.12em;padding:4px 8px;display:flex;justify-content:space-between}
+.plate .num{font:600 28px/1.1 var(--f-mono);letter-spacing:.08em;text-align:center;padding:4px 10px}
+h1{font:700 32px/1.05 var(--f-display);margin:0;letter-spacing:.01em;text-wrap:balance}
+.sub{color:var(--muted);margin:2px 0 0}
+.grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.05fr);gap:20px;align-items:start}
+@media (max-width:900px){.grid{grid-template-columns:minmax(0,1fr)}}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;min-width:0}
+.steps{display:flex;gap:4px;padding:8px;border-bottom:1px solid var(--line);overflow-x:auto}
+.steps button{flex:1 0 auto;border:0;background:transparent;color:var(--muted);font:600 15px var(--f-display);letter-spacing:.04em;text-transform:uppercase;
+  padding:10px 12px;border-radius:6px;cursor:pointer;display:flex;gap:8px;align-items:center}
+.steps button .n{display:inline-grid;place-items:center;width:22px;height:22px;border-radius:50%;border:1.5px solid currentColor;font-size:12px}
+.steps button[aria-selected="true"]{background:var(--accent);color:var(--accent-ink)}
+.steps button.done:not([aria-selected="true"]) .n{background:var(--ok);border-color:var(--ok);color:#fff}
+.steps button:focus-visible,.btn:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.step{padding:18px;display:grid;gap:16px}
+.step h2{font:700 22px var(--f-display);margin:0;letter-spacing:.02em}
+.step .hint{color:var(--muted);margin:-10px 0 0;font-size:14px}
+fieldset{border:0;padding:0;margin:0;display:grid;gap:12px;grid-template-columns:repeat(6,minmax(0,1fr))}
+legend{font:600 13px var(--f-body);text-transform:uppercase;letter-spacing:.08em;color:var(--muted);padding:0;margin-bottom:10px;grid-column:1/-1}
+.f{display:grid;gap:4px;grid-column:span 3;min-width:0}
+.f.s2{grid-column:span 2}.f.s6{grid-column:1/-1}.f.s4{grid-column:span 4}
+@media (max-width:520px){.f,.f.s2,.f.s4{grid-column:1/-1}}
+label{font-size:13px;font-weight:600;color:var(--muted)}
+input,select,textarea{width:100%;font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:9px 10px;min-width:0}
+textarea{min-height:70px;resize:vertical}
+.chips{display:flex;flex-wrap:wrap;gap:8px;grid-column:1/-1}
+.chip{display:flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:999px;padding:6px 12px;cursor:pointer;font-size:14px;background:var(--bg)}
+.chip input{width:auto;margin:0}
+.chip:has(input:checked){border-color:var(--accent);background:var(--accent-soft)}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:8px;grid-column:1/-1}
+.card{border:1.5px solid var(--line);border-radius:8px;padding:10px 12px;cursor:pointer;display:grid;gap:2px;background:var(--bg)}
+.card input{position:absolute;opacity:0;pointer-events:none}
+.card b{font:600 16px var(--f-display);letter-spacing:.02em}
+.card span{font-size:13px;color:var(--muted)}
+.card:has(input:checked){border-color:var(--accent);background:var(--accent-soft)}
+.card:has(input:focus-visible){outline:2px solid var(--accent);outline-offset:2px}
+.nav{display:flex;justify-content:space-between;gap:8px;padding:14px 18px;border-top:1px solid var(--line);flex-wrap:wrap}
+.btn{font:600 16px var(--f-display);letter-spacing:.05em;text-transform:uppercase;border-radius:6px;padding:11px 18px;cursor:pointer;border:1.5px solid var(--accent);background:transparent;color:var(--accent)}
+.btn.primary{background:var(--accent);color:var(--accent-ink)}
+.btn:disabled{opacity:.45;cursor:default}
+.btn.small{font-size:13px;padding:6px 10px}
+.summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px}
+.summary div{border:1px solid var(--line);border-radius:8px;padding:10px;background:var(--bg)}
+.summary small{display:block;color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.08em}
+.summary strong{font:600 20px var(--f-display);font-variant-numeric:tabular-nums}
+.sched{max-height:200px;overflow:auto;border:1px solid var(--line);border-radius:8px}
+table{border-collapse:collapse;width:100%;font-variant-numeric:tabular-nums;font-size:14px}
+th,td{text-align:left;padding:6px 10px;border-bottom:1px solid var(--line)}
+th{font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);position:sticky;top:0;background:var(--panel)}
+.sigs{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px}
+.sig{display:grid;gap:6px}
+.sig .head{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.sig canvas{width:100%;height:140px;background:#fff;border:1.5px dashed var(--line);border-radius:8px;touch-action:none;cursor:crosshair}
+.missing{border-left:3px solid var(--warn);padding:8px 12px;background:var(--bg);border-radius:0 6px 6px 0;font-size:14px}
+.missing ul{margin:4px 0 0;padding-left:18px}
+.status{font-size:14px;color:var(--muted);min-height:1.4em}
+.status.ok{color:var(--ok)}.status.err{color:var(--warn)}
+/* contrato */
+.doc{position:sticky;top:12px;max-height:calc(100vh - 24px);display:flex;flex-direction:column}
+.doc .bar{display:flex;justify-content:space-between;align-items:center;padding:12px 16px;border-bottom:1px solid var(--line);gap:8px}
+.doc .bar b{font:700 18px var(--f-display);letter-spacing:.03em}
+.doc .bar span{font:500 13px var(--f-mono);color:var(--muted)}
+.paper{overflow:auto;padding:24px 26px;background:var(--paper);border-radius:0 0 10px 10px;font-size:13.5px;line-height:1.55}
+@media (max-width:900px){.doc{position:static;max-height:none}.paper{max-height:70vh}}
+.paper h3{font:700 19px var(--f-display);text-align:center;margin:0 0 4px;letter-spacing:.03em;text-transform:uppercase}
+.paper .no{text-align:center;font:500 12px var(--f-mono);color:var(--muted);margin:0 0 16px}
+.paper h4{font:600 14px var(--f-body);margin:16px 0 4px;text-transform:uppercase;letter-spacing:.04em}
+.paper p{margin:0 0 6px;max-width:72ch}
+.paper mark{background:transparent;color:var(--warn);font-weight:600}
+.paper .sgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:20px;margin-top:24px}
+.paper .sline{border-top:1px solid var(--ink);padding-top:4px;font-size:12px;text-align:center}
+.paper .sline img{display:block;margin:0 auto -4px;max-height:60px}
+.paper table{font-size:12.5px;margin:6px 0}
+.fleet{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:8px}
+.vcard{border:1.5px solid var(--line);border-radius:8px;padding:10px;background:var(--bg);cursor:pointer;display:grid;gap:6px;text-align:left;font:inherit;color:var(--ink)}
+.vcard[aria-pressed="true"]{border-color:var(--accent);background:var(--accent-soft)}
+.vcard .mini{font:600 15px var(--f-mono);letter-spacing:.06em;border:1.5px solid #111;border-top:5px solid #1f4fa3;border-radius:4px;background:#fff;color:#111;text-align:center;padding:2px 4px}
+.vcard small{color:var(--muted);font-size:13px}
+.vcard.add{place-items:center;border-style:dashed;color:var(--accent);font:600 15px var(--f-display);letter-spacing:.04em;text-transform:uppercase}
+.brand{font:600 13px var(--f-body);letter-spacing:.14em;text-transform:uppercase;color:var(--accent);margin:0}
+.views{display:flex;gap:4px;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:4px;width:fit-content;max-width:100%}
+.views button{border:0;background:transparent;color:var(--muted);font:600 16px var(--f-display);letter-spacing:.04em;text-transform:uppercase;padding:9px 16px;border-radius:6px;cursor:pointer;display:flex;align-items:center}
+.views button[aria-selected="true"]{background:var(--accent);color:var(--accent-ink)}
+.badge{background:var(--late);color:#fff;border-radius:999px;font:600 12px var(--f-body);padding:1px 7px;margin-left:6px}
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px}
+.tile{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px}
+.tile small{display:block;color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.08em}
+.tile strong{font:700 28px var(--f-display);font-variant-numeric:tabular-nums}
+.tile.late strong{color:var(--late)}
+.ct{background:var(--panel);border:1px solid var(--line);border-radius:10px;overflow:hidden;min-width:0}
+.ct>header{display:flex;gap:12px;align-items:center;padding:14px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+.ct .who{flex:1;min-width:180px;display:grid}
+.ct .who b{font:600 18px var(--f-display);letter-spacing:.02em}
+.ct .who small{color:var(--muted)}
+.ct .mini{font:600 15px var(--f-mono);letter-spacing:.06em;border:1.5px solid #111;border-top:5px solid #1f4fa3;border-radius:4px;background:#fff;color:#111;padding:2px 8px}
+.ct .confirm{padding:12px 14px;border-bottom:1px solid var(--line);background:var(--bg);display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.prow{display:grid;grid-template-columns:2.4em minmax(0,1fr) auto auto;gap:6px 12px;align-items:center;padding:10px 14px;border-bottom:1px solid var(--line);font-variant-numeric:tabular-nums}
+.prow:last-child{border-bottom:0}
+.prow .n{font:600 14px var(--f-mono);color:var(--muted)}
+.prow .d small{display:block;color:var(--muted);font-size:13px}
+@media (max-width:600px){.prow{grid-template-columns:2em minmax(0,1fr) auto}.prow .pacts{grid-column:1/-1;justify-content:flex-start}}
+.pacts{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+.st{font:600 12px var(--f-body);letter-spacing:.05em;text-transform:uppercase;padding:3px 9px;border-radius:999px;border:1px solid currentColor;white-space:nowrap}
+.st.pago{color:var(--ok)}.st.atr{color:var(--late);background:var(--late-soft)}.st.hoje{color:var(--warn)}.st.prox{color:var(--accent)}.st.fut{color:var(--muted)}
+a.btn{text-decoration:none;display:inline-block}
+.btn.wa{border-color:var(--ok);color:var(--ok)}
+.btn.danger{border-color:var(--late);color:var(--late)}
+.sect{font:600 13px var(--f-body);text-transform:uppercase;letter-spacing:.1em;color:var(--muted);margin:8px 0 0}
+.empty{background:var(--panel);border:1.5px dashed var(--line);border-radius:10px;padding:24px;color:var(--muted)}
+.fx{display:grid;gap:4px;min-width:0}
+.cnhprev{max-width:220px;border-radius:6px;border:1px solid var(--line)}
+@media (prefers-reduced-motion:no-preference){.steps button,.card,.chip{transition:background .15s,border-color .15s}}
+</style>
+</head>
+<body>
+<div class="login" id="loginBox" hidden>
+  <div class="plate" aria-hidden="true" style="justify-self:start"><div class="band"><span>BRASIL</span><span>BR</span></div><div class="num">GAC</div></div>
+  <div><p class="brand">GAC Locações de Veículos</p><h1>Entrar</h1></div>
+  <form id="loginForm" style="display:grid;gap:12px">
+    <div class="fx"><label for="lg_email">E-mail</label><input id="lg_email" type="email" autocomplete="username" required></div>
+    <div class="fx"><label for="lg_senha">Senha</label><input id="lg_senha" type="password" autocomplete="current-password" minlength="6" required></div>
+    <button class="btn primary" type="submit" id="lgEntrar">Entrar</button>
+    <button class="btn" type="button" id="lgCriar">Primeiro acesso: criar senha</button>
+  </form>
+  <p class="status" id="lgStatus" role="status"></p>
+</div>
+
+<div class="wrap" id="app" hidden>
+  <header class="top">
+    <div class="plate" aria-hidden="true"><div class="band"><span>BRASIL</span><span>BR</span></div><div class="num" id="plateNum">AUC3C73</div></div>
+    <div style="flex:1;min-width:200px">
+      <p class="brand">GAC Locações de Veículos</p>
+      <h1>Contrato de Locação</h1>
+      <p class="sub">Escolha o carro, preencha o cliente e as condições, colete as assinaturas e gere o PDF.</p>
+    </div>
+    <div class="acct"><span id="acctEmail"></span><button type="button" class="btn small" id="btnSair">Sair</button></div>
+  </header>
+
+  <div class="views" role="tablist">
+    <button role="tab" id="vNovo" aria-selected="true">Novo contrato</button>
+    <button role="tab" id="vPag" aria-selected="false">Pagamentos<span class="badge" id="lateBadge" hidden></span></button>
+  </div>
+
+  <div id="viewNovo">
+  <div class="grid">
+    <section class="panel" aria-label="Formulário">
+      <div class="steps" role="tablist" id="tabs">
+        <button role="tab" data-s="0" aria-selected="true"><span class="n">1</span>Locador</button>
+        <button role="tab" data-s="1"><span class="n">2</span>Cliente</button>
+        <button role="tab" data-s="2"><span class="n">3</span>Veículo</button>
+        <button role="tab" data-s="3"><span class="n">4</span>Condições</button>
+        <button role="tab" data-s="4"><span class="n">5</span>Assinar</button>
+      </div>
+
+      <form id="form" autocomplete="off">
+      <!-- 1 LOCADOR -->
+      <div class="step" data-step="0">
+        <h2>Locador — proprietário do veículo</h2>
+        <p class="hint">Preencha uma vez com os dados de quem está no documento do carro. Ficam fixos para todos os contratos.</p>
+        <fieldset>
+          <div class="f s4"><label for="ld_nome">Nome completo ou razão social</label><input id="ld_nome" required></div>
+          <div class="f s2"><label for="ld_doc">CPF / CNPJ</label><input id="ld_doc" inputmode="numeric" required></div>
+          <div class="f s2"><label for="ld_rg">RG</label><input id="ld_rg"></div>
+          <div class="f s4"><label for="ld_tel">Telefone / WhatsApp</label><input id="ld_tel" inputmode="tel"></div>
+          <div class="f s6"><label for="ld_end">Endereço completo</label><input id="ld_end" required></div>
+          <div class="f s4"><label for="ld_pix">Chave PIX para pagamento</label><input id="ld_pix"></div>
+          <div class="f s2"><label for="cidade">Cidade do contrato</label><input id="cidade" value="Curitiba/PR"></div>
+        </fieldset>
+      </div>
+
+      <!-- 2 CLIENTE -->
+      <div class="step" data-step="1" hidden>
+        <h2>Dados do cliente (locatário)</h2>
+        <fieldset>
+          <legend>Identificação</legend>
+          <div class="f s4"><label for="lt_nome">Nome completo</label><input id="lt_nome" required></div>
+          <div class="f s2"><label for="lt_cpf">CPF</label><input id="lt_cpf" inputmode="numeric" required></div>
+          <div class="f s2"><label for="lt_rg">RG</label><input id="lt_rg"></div>
+          <div class="f s2"><label for="lt_nasc">Nascimento</label><input id="lt_nasc" type="date"></div>
+          <div class="f s2"><label for="lt_civil">Estado civil</label><select id="lt_civil"><option>solteiro(a)</option><option>casado(a)</option><option>divorciado(a)</option><option>viúvo(a)</option><option>em união estável</option></select></div>
+          <div class="f s3"><label for="lt_prof">Profissão</label><input id="lt_prof"></div>
+          <div class="f s3"><label for="lt_tel">Telefone / WhatsApp</label><input id="lt_tel" inputmode="tel" required></div>
+          <div class="f s6"><label for="lt_end">Endereço completo com CEP</label><input id="lt_end" required></div>
+          <div class="f s6"><label for="lt_ref">Contato de referência (nome e telefone)</label><input id="lt_ref"></div>
+        </fieldset>
+        <fieldset>
+          <legend>Habilitação (CNH)</legend>
+          <div class="f s2"><label for="cnh_num">Nº de registro</label><input id="cnh_num" inputmode="numeric" required></div>
+          <div class="f s2"><label for="cnh_cat">Categoria</label><select id="cnh_cat"><option>B</option><option>AB</option><option>C</option><option>AC</option><option>D</option><option>AD</option><option>E</option><option>AE</option></select></div>
+          <div class="f s2"><label for="cnh_val">Validade</label><input id="cnh_val" type="date" required></div>
+          <div class="f s2"><label for="cnh_hab">1ª habilitação</label><input id="cnh_hab" type="date"></div>
+          <div class="f s2"><label for="cnh_uf">UF emissora</label><input id="cnh_uf" value="PR" maxlength="2"></div>
+          <div class="f s2"><label for="cnh_ear">Exerce atividade remunerada (EAR)</label><select id="cnh_ear"><option value="nao">Não</option><option value="sim">Sim</option></select></div>
+          <div class="f s6"><label for="cnh_foto">Foto da CNH (vai como anexo no PDF)</label><input id="cnh_foto" type="file" accept="image/*"></div>
+          <div class="f s6" id="cnhWarn" hidden></div>
+          <img id="cnhPrev" class="cnhprev" alt="Prévia da CNH" hidden>
+        </fieldset>
+      </div>
+
+      <!-- 3 VEÍCULO -->
+      <div class="step" data-step="2" hidden>
+        <h2>Veículo locado</h2>
+        <div>
+          <label>Frota GAC — toque no carro que vai ser locado</label>
+          <div class="fleet" id="fleet" style="margin-top:6px"></div>
+        </div>
+        <fieldset>
+          <legend>Dados do veículo</legend>
+          <div class="f s3"><label for="v_modelo">Marca / modelo</label><input id="v_modelo" value="Chevrolet Corsa 1.4"></div>
+          <div class="f s3"><label for="v_ano">Ano fab./modelo</label><input id="v_ano" value="2012/2012"></div>
+          <div class="f s2"><label for="v_placa">Placa</label><input id="v_placa" value="AUC3C73" style="font-family:var(--f-mono);text-transform:uppercase"></div>
+          <div class="f s2"><label for="v_cor">Cor</label><input id="v_cor" value="Preta"></div>
+          <div class="f s2"><label for="v_comb">Combustível</label><input id="v_comb" value="Flex (álcool/gasolina)"></div>
+          <div class="f s3"><label for="v_renavam">RENAVAM</label><input id="v_renavam" inputmode="numeric"></div>
+          <div class="f s3"><label for="v_chassi">Chassi</label><input id="v_chassi"></div>
+          <div class="f s2"><label for="v_valor">Valor de referência (FIPE)</label><input id="v_valor" inputmode="decimal" placeholder="R$"></div>
+          <div class="f s6" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><button type="button" class="btn small primary" id="btnSalvarV">Salvar na frota</button><span class="status" id="vStatus"></span></div>
+        </fieldset>
+        <fieldset>
+          <legend>Vistoria de entrega</legend>
+          <div class="f s2"><label for="v_km">Km de saída</label><input id="v_km" inputmode="numeric"></div>
+          <div class="f s2"><label for="v_tanque">Combustível na saída</label><select id="v_tanque"><option selected>Cheio</option><option>3/4</option><option>1/2</option><option>1/4</option><option>Reserva</option></select></div>
+          <div class="f s2"><label for="v_limpeza">Limpeza na saída</label><select id="v_limpeza"><option selected>Limpo por dentro e por fora</option><option>Limpeza parcial</option><option>Sujo</option></select></div>
+          <div class="chips" role="group" aria-label="Itens entregues">
+            <label class="chip"><input type="checkbox" name="itens" value="CRLV digital" checked>CRLV</label>
+            <label class="chip"><input type="checkbox" name="itens" value="estepe" checked>Estepe</label>
+            <label class="chip"><input type="checkbox" name="itens" value="macaco" checked>Macaco</label>
+            <label class="chip"><input type="checkbox" name="itens" value="chave de roda" checked>Chave de roda</label>
+            <label class="chip"><input type="checkbox" name="itens" value="triângulo" checked>Triângulo</label>
+            <label class="chip"><input type="checkbox" name="itens" value="tapetes">Tapetes</label>
+            <label class="chip"><input type="checkbox" name="itens" value="rastreador">Rastreador</label>
+            <label class="chip"><input type="checkbox" name="itens" value="chave reserva">Chave reserva</label>
+          </div>
+          <div class="f s6"><label for="v_avarias">Avarias já existentes</label><textarea id="v_avarias" placeholder="Ex.: risco na porta traseira direita; pequeno amassado no para-choque dianteiro."></textarea></div>
+        </fieldset>
+      </div>
+
+      <!-- 4 CONDIÇÕES -->
+      <div class="step" data-step="3" hidden>
+        <h2>Condições da locação</h2>
+        <fieldset>
+          <legend>Datas</legend>
+          <div class="f s2"><label for="d_ini">Entrega do carro</label><input id="d_ini" type="date" required></div>
+          <div class="f s2"><label for="d_prazo">Período</label><select id="d_prazo"><option value="1" selected>1 mês (renovável)</option><option value="2">2 meses</option><option value="3">3 meses</option><option value="0">Outra data</option></select></div>
+          <div class="f s2"><label for="d_fim">Fim do período</label><input id="d_fim" type="date" required></div>
+          <div class="f s2"><label for="d_hora">Horário de entrega/devolução</label><input id="d_hora" type="time" value="09:00"></div>
+        </fieldset>
+        <fieldset>
+          <legend>Valores — pagamento semanal</legend>
+          <div class="f s2"><label for="p_sem">Aluguel por semana (R$)</label><input id="p_sem" inputmode="decimal" required></div>
+          <div class="f s2"><label for="p_1venc">1º vencimento</label><input id="p_1venc" type="date" required></div>
+          <div class="f s2"><label for="p_caucao">Caução (R$)</label><input id="p_caucao" inputmode="decimal" value="1000"></div>
+          <div class="f s2"><label for="p_cdev">Devolução da caução</label><select id="p_cdev"><option value="ato" selected>Na entrega do carro, após a vistoria</option><option value="30">Em até 30 dias (espera multas)</option></select></div>
+          <div class="f s2" style="align-content:end"><label class="chip"><input type="checkbox" name="isento">Isentar caução neste contrato</label></div>
+          <div class="f s2"><label for="p_diaria">Diária por atraso na devolução (R$)</label><input id="p_diaria" inputmode="decimal"></div>
+          <div class="f s2"><label for="p_km">Limite de km por semana</label><input id="p_km" inputmode="numeric" placeholder="Livre"></div>
+          <div class="f s2"><label for="p_kmext">Km excedente (R$/km)</label><input id="p_kmext" inputmode="decimal"></div>
+          <div class="f s2"><label for="p_tol">Tolerância de atraso (dias)</label><input id="p_tol" inputmode="numeric" value="2"></div>
+          <div class="f s2"><label for="p_multa">Multa contratual (R$)</label><input id="p_multa" inputmode="decimal"></div>
+          <div class="f s2"><label for="p_rev">Revisão a cada (km)</label><input id="p_rev" inputmode="numeric" value="5000"></div>
+          <div class="f s2"><label for="p_lavagem">Taxa de lavagem se voltar sujo (R$)</label><input id="p_lavagem" inputmode="decimal"></div>
+        </fieldset>
+        <fieldset>
+          <legend>Uso do veículo</legend>
+          <div class="cards">
+            <label class="card"><input type="radio" name="uso" value="app" checked><b>Aplicativo</b><span>Uber, 99, inDrive e entregas</span></label>
+            <label class="card"><input type="radio" name="uso" value="particular"><b>Particular</b><span>Uso pessoal e familiar</span></label>
+          </div>
+          <div class="f s3"><label for="u_estado">Circulação</label><select id="u_estado"><option value="pr">Somente no Paraná</option><option value="metro">Somente na Região Metropolitana</option><option value="livre">Livre no território nacional</option></select></div>
+          <div class="f s3"><label for="u_cond">Condutor adicional (nome e CNH)</label><input id="u_cond" placeholder="Nenhum"></div>
+        </fieldset>
+        <fieldset>
+          <legend>Seguro / proteção do veículo</legend>
+          <div class="cards" id="segCards">
+            <label class="card"><input type="radio" name="seg" value="total" checked><b>Seguro total</b><span>Colisão, roubo, furto, incêndio e terceiros</span></label>
+            <label class="card"><input type="radio" name="seg" value="protecao"><b>Proteção veicular</b><span>Associação / cooperativa</span></label>
+            <label class="card"><input type="radio" name="seg" value="terceiros"><b>Só terceiros (RCF)</b><span>Danos a outros veículos e pessoas</span></label>
+            <label class="card"><input type="radio" name="seg" value="roubo"><b>Roubo e furto</b><span>Sem cobertura de colisão</span></label>
+            <label class="card"><input type="radio" name="seg" value="nenhum"><b>Sem seguro</b><span>Locatário responde por tudo</span></label>
+          </div>
+          <div class="f s3 segx"><label for="s_cia">Seguradora / associação</label><input id="s_cia"></div>
+          <div class="f s3 segx"><label for="s_apol">Apólice / contrato nº</label><input id="s_apol"></div>
+          <div class="f s3 segx"><label for="s_fran">Franquia / cota de participação (R$)</label><input id="s_fran" inputmode="decimal"></div>
+          <div class="f s3 segx"><label for="s_terc">Cobertura para terceiros (R$)</label><input id="s_terc" inputmode="decimal"></div>
+          <div class="chips segx" role="group" aria-label="Assistências">
+            <label class="chip"><input type="checkbox" name="assist" value="guincho 24h" checked>Guincho 24h</label>
+            <label class="chip"><input type="checkbox" name="assist" value="vidros">Vidros</label>
+            <label class="chip"><input type="checkbox" name="assist" value="carro reserva">Carro reserva</label>
+            <label class="chip"><input type="checkbox" name="assist" value="APP (acidentes pessoais de passageiros)">APP passageiros</label>
+          </div>
+        </fieldset>
+        <fieldset>
+          <legend>Observações</legend>
+          <div class="f s6"><label for="obs">Condições extras (opcional)</label><textarea id="obs"></textarea></div>
+        </fieldset>
+      </div>
+
+      <!-- 5 ASSINAR -->
+      <div class="step" data-step="4" hidden>
+        <h2>Revisar, assinar e gerar PDF</h2>
+        <div class="summary" id="summary"></div>
+        <div>
+          <label>Cronograma de pagamentos semanais</label>
+          <div class="sched"><table><thead><tr><th>Parcela</th><th>Vencimento</th><th>Valor</th></tr></thead><tbody id="schedBody"></tbody></table></div>
+        </div>
+        <div class="missing" id="missing" hidden></div>
+        <div class="sigs">
+          <div class="sig"><div class="head"><label>Assinatura do locatário</label><button type="button" class="btn small" data-clear="lt">Limpar</button></div><canvas id="sig_lt" aria-label="Área para o cliente assinar com o dedo"></canvas></div>
+          <div class="sig"><div class="head"><label>Assinatura do locador</label><button type="button" class="btn small" data-clear="ld">Limpar</button></div><canvas id="sig_ld" aria-label="Área para o locador assinar com o dedo"></canvas></div>
+        </div>
+        <p class="hint" style="margin:0">Deixe em branco para imprimir e assinar à caneta.</p>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button type="button" class="btn primary" id="btnPdf">Gerar PDF do contrato</button>
+          <button type="button" class="btn" id="btnSalvarC">Salvar no controle de pagamentos</button>
+          <button type="button" class="btn" id="btnNovo">Novo contrato</button>
+        </div>
+        <p class="status" id="status" role="status"></p>
+        <div id="confirmNovo" hidden class="missing">Apagar os dados deste cliente e começar outro contrato? Os seus dados de locador continuam.
+          <div style="display:flex;gap:8px;margin-top:8px"><button type="button" class="btn small primary" id="novoSim">Sim, começar novo</button><button type="button" class="btn small" id="novoNao">Cancelar</button></div></div>
+      </div>
+      </form>
+
+      <div class="nav">
+        <button type="button" class="btn" id="prev">Voltar</button>
+        <button type="button" class="btn primary" id="next">Avançar</button>
+      </div>
+    </section>
+
+    <section class="panel doc" aria-label="Contrato">
+      <div class="bar"><b>Contrato ao vivo</b><span id="cno"></span></div>
+      <div class="paper" id="paper"></div>
+    </section>
+  </div>
+  </div>
+
+  <div id="viewPag" hidden>
+    <div style="display:grid;gap:14px">
+      <div class="tiles" id="tiles"></div>
+      <p class="status" id="pagStatus" role="status"></p>
+      <div id="pagBody" style="display:grid;gap:14px"></div>
+      <section class="acessos" aria-label="Acessos">
+        <b>Quem pode usar o app</b>
+        <ul id="membrosList"><li>Carregando…</li></ul>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:end">
+          <div class="fx" style="flex:1;min-width:200px"><label for="mb_email">Autorizar outro e-mail</label><input id="mb_email" type="email" placeholder="email@exemplo.com"></div>
+          <button type="button" class="btn small primary" id="mbAdd">Autorizar</button>
+        </div>
+        <small style="color:var(--muted)">Depois de autorizar, a pessoa abre o app, toca em “Primeiro acesso: criar senha” e usa esse e-mail.</small>
+        <span class="status" id="mbStatus"></span>
+      </section>
+    </div>
+  </div>
+</div>
+
+<script>
+const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
+const KEY_LD='loc_locador_v1', KEY_DRAFT='loc_draft_v1';
+const LD_FIELDS=['ld_nome','ld_doc','ld_rg','ld_tel','ld_end','ld_pix','cidade'];
+let step=0, cnhData=null, contractNo='';
+
+/* ---------- utilidades ---------- */
+const NOMES=new Set(['ld_nome','lt_nome']);
+const val=id=>{if(id==='p_caucao'&&document.querySelector('input[name="isento"]')?.checked)return '';const v=($('#'+id)?.value||'').trim();return NOMES.has(id)?v.replace(/\s+/g,' ').toLocaleUpperCase('pt-BR'):v};
+const num=s=>{s=String(s||'').replace(/[^\d,.-]/g,'');if(s.includes(','))s=s.replace(/\./g,'').replace(',','.');const n=parseFloat(s);return isNaN(n)?null:n};
+const brl=n=>n==null?null:n.toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
+const pd=s=>{if(!s)return null;const[a,b,c]=s.split('-').map(Number);return new Date(a,b-1,c)};
+const fd=d=>d?d.toLocaleDateString('pt-BR'):null;
+const fds=s=>fd(pd(s));
+const DIAS=['domingo','segunda-feira','terça-feira','quarta-feira','quinta-feira','sexta-feira','sábado'];
+const MESES=['janeiro','fevereiro','março','abril','maio','junho','julho','agosto','setembro','outubro','novembro','dezembro'];
+
+function extenso(v){
+  if(v==null)return '';
+  const u=['','um','dois','três','quatro','cinco','seis','sete','oito','nove','dez','onze','doze','treze','quatorze','quinze','dezesseis','dezessete','dezoito','dezenove'];
+  const d=['','','vinte','trinta','quarenta','cinquenta','sessenta','setenta','oitenta','noventa'];
+  const c=['','cento','duzentos','trezentos','quatrocentos','quinhentos','seiscentos','setecentos','oitocentos','novecentos'];
+  const t=n=>{if(n===0)return '';if(n===100)return 'cem';const p=[];const h=Math.floor(n/100),r=n%100;if(h)p.push(c[h]);if(r){if(r<20)p.push(u[r]);else{p.push(d[Math.floor(r/10)]+(r%10?' e '+u[r%10]:''))}}return p.join(' e ')};
+  const ints=Math.floor(v), cents=Math.round((v-ints)*100);
+  const mi=Math.floor(ints/1e6),mil=Math.floor((ints%1e6)/1000),r=ints%1000;const parts=[];
+  if(mi)parts.push(t(mi)+(mi>1?' milhões':' milhão'));
+  if(mil)parts.push(mil===1?'mil':t(mil)+' mil');
+  if(r)parts.push(t(r));
+  let s=parts.length>1?parts.slice(0,-1).join(', ')+((r&&(r<100||r%100===0))?' e ':' ')+parts[parts.length-1]:(parts[0]||'');
+  if(ints)s+=(ints===1?' real':(ints%1e6===0?' de reais':' reais'));
+  if(cents)s+=(ints?' e ':'')+t(cents)+(cents===1?' centavo':' centavos');
+  return s||'zero real';
+}
+const money=v=>{const n=num(v);return n==null?null:`${brl(n)} (${extenso(n)})`};
+const radio=n=>($(`input[name="${n}"]:checked`)||{}).value;
+const checks=n=>$$(`input[name="${n}"]:checked`).map(i=>i.value);
+const F=(x,label)=>x?esc(x):`<mark>[${label}]</mark>`; // campo vazio vira marcador
+function esc(s){return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}
+function listar(a){return a.length<2?(a[0]||''):a.slice(0,-1).join(', ')+' e '+a[a.length-1]}
+
+/* ---------- cronograma semanal ---------- */
+function schedule(){
+  const v=num(val('p_sem')), first=pd(val('p_1venc')), end=pd(val('d_fim'));
+  if(!v||!first)return [];
+  const out=[];let d=new Date(first);const lim=end||new Date(first.getTime()+7*86400000*3);
+  while(d<lim&&out.length<260){out.push({n:out.length+1,d:new Date(d),v});d.setDate(d.getDate()+7)}
+  return out;
+}
+
+/* ---------- texto do contrato (mesma fonte para tela e PDF) ---------- */
+const SEG={
+  total:'seguro de cobertura compreensiva (total), abrangendo colisão, incêndio, roubo, furto e responsabilidade civil facultativa perante terceiros',
+  protecao:'proteção veicular contratada junto a associação/cooperativa de proteção, nos termos do respectivo regulamento',
+  terceiros:'seguro de responsabilidade civil facultativa (RCF), que cobre exclusivamente danos materiais e corporais causados a terceiros, NÃO cobrindo danos ao próprio veículo locado',
+  roubo:'seguro contra roubo e furto, que NÃO cobre colisão, danos ao próprio veículo por acidente nem danos a terceiros',
+  nenhum:'nenhum seguro ou proteção'
+};
+function build(){
+  const uso=radio('uso'), seg=radio('seg'), sched=schedule(), itens=checks('itens'), assist=checks('assist');
+  const est={pr:'dentro do Estado do Paraná',metro:'dentro da Região Metropolitana de '+(val('cidade').split('/')[0]||'Curitiba'),livre:'em todo o território nacional'}[val('u_estado')];
+  const kmLim=num(val('p_km'));
+  const cnhEar=val('cnh_ear')==='sim';
+  const C=[];
+  C.push({h:'Das partes',p:[
+    `<b>LOCADOR:</b> ${F(val('ld_nome'),'nome do locador')}, inscrito no CPF/CNPJ sob o nº ${F(val('ld_doc'),'CPF/CNPJ')}${val('ld_rg')?', RG nº '+esc(val('ld_rg')):''}, com endereço em ${F(val('ld_end'),'endereço do locador')}${val('ld_tel')?', telefone '+esc(val('ld_tel')):''}.`,
+    `<b>LOCATÁRIO:</b> ${F(val('lt_nome'),'nome do cliente')}, brasileiro(a), ${esc(val('lt_civil'))}${val('lt_prof')?', '+esc(val('lt_prof')):''}${val('lt_nasc')?', nascido(a) em '+fds(val('lt_nasc')):''}, inscrito(a) no CPF sob o nº ${F(val('lt_cpf'),'CPF')}${val('lt_rg')?', RG nº '+esc(val('lt_rg')):''}, residente em ${F(val('lt_end'),'endereço do cliente')}, telefone ${F(val('lt_tel'),'telefone')}, habilitado(a) pela CNH nº ${F(val('cnh_num'),'nº da CNH')}, categoria ${esc(val('cnh_cat'))}, emitida no ${esc(val('cnh_uf')||'PR')}, válida até ${F(fds(val('cnh_val')),'validade')}${val('cnh_hab')?', primeira habilitação em '+fds(val('cnh_hab')):''}${cnhEar?', com observação EAR (exerce atividade remunerada)':''}.`,
+    `As partes acima têm entre si justo e contratado o presente Contrato de Locação de Veículo Automotor, regido pelos artigos 565 a 578 do Código Civil e pelas cláusulas a seguir.`
+  ]});
+  C.push({h:'Cláusula 1ª – Do objeto',p:[
+    `1.1. O LOCADOR dá em locação ao LOCATÁRIO o veículo ${esc(val('v_modelo'))}, ano ${esc(val('v_ano'))}, cor ${esc(val('v_cor'))}, combustível ${esc(val('v_comb'))}, placa <b>${esc(val('v_placa').toUpperCase())}</b>, RENAVAM ${F(val('v_renavam'),'RENAVAM')}, chassi ${F(val('v_chassi'),'chassi')}${num(val('v_valor'))?', com valor de referência de '+brl(num(val('v_valor'))):''}.`,
+    `1.2. O veículo é entregue em ${F(fds(val('d_ini')),'data de entrega')}, às ${esc(val('d_hora')||'09:00')}, com ${F(val('v_km'),'km de saída')} km no hodômetro (km de saída), tanque ${val('v_tanque')==='Cheio'?'cheio':'em '+esc(val('v_tanque'))}, ${esc(val('v_limpeza')).toLowerCase()}${itens.length?', acompanhado de: '+esc(listar(itens)):''}.`,
+    `1.3. Avarias existentes na entrega: ${val('v_avarias')?esc(val('v_avarias')):'nenhuma'}. O LOCATÁRIO declara ter vistoriado o veículo, que recebe em perfeito estado de funcionamento, conservação e limpeza, ressalvado o descrito acima. As fotos datadas da vistoria integram este contrato.`
+  ]});
+  C.push({h:'Cláusula 2ª – Do prazo',p:[
+    `2.1. A locação tem prazo de ${({'1':'1 (um) mês','2':'2 (dois) meses','3':'3 (três) meses'})[val('d_prazo')]||'prazo determinado'}, de ${F(fds(val('d_ini')),'data de entrega')} a ${F(fds(val('d_fim')),'fim do período')}, quando o veículo deverá ser devolvido até as ${esc(val('d_hora')||'09:00')}, salvo renovação.`,
+    `2.2. Ao final de cada período, a locação poderá ser renovada por novo período mensal, nas mesmas condições deste contrato, a pedido do LOCATÁRIO feito até 3 (três) dias antes do término e com a concordância do LOCADOR, por escrito, valendo para isso mensagem de WhatsApp ou e-mail. Na renovação, o valor do aluguel poderá ser reajustado, desde que avisado com a mesma antecedência.`,
+    `2.3. O LOCATÁRIO poderá devolver o veículo antes do fim do período, a qualquer momento e sem multa, bastando avisar o LOCADOR com 1 (um) dia de antecedência. Nesse caso, pagará somente as semanas até a devolução, sem restituição do valor da semana em curso já paga${num(val('p_caucao'))?', e a caução será devolvida conforme a cláusula 4ª':''}.`,
+    `2.4. Terminado o período sem renovação, permanecendo com o veículo sem autorização, o LOCATÁRIO pagará ${num(val('p_diaria'))?'diária de '+money(val('p_diaria')):'<mark>[diária por atraso]</mark>'} por dia excedente, sem prejuízo das medidas de retomada do bem.`
+  ]});
+  const pay=[`3.1. O aluguel é de ${num(val('p_sem'))?money(val('p_sem')):'<mark>[valor semanal]</mark>'} <b>por semana</b>, pago antecipadamente, com primeiro vencimento em ${F(fds(val('p_1venc')),'1º vencimento')} e os demais a cada 7 (sete) dias${pd(val('p_1venc'))?', sempre às '+DIAS[pd(val('p_1venc')).getDay()]+'s':''}${sched.length?', totalizando '+sched.length+' parcela(s) e '+brl(sched.length*num(val('p_sem')))+' no período':''}.`,
+    `3.2. O pagamento será feito preferencialmente por PIX${val('ld_pix')?' para a chave '+esc(val('ld_pix')):''}, ou por outra forma aceita pelo LOCADOR (dinheiro, cartão ou transferência). O comprovante ou recibo vale como quitação, e eventuais taxas de cartão correm por conta do LOCATÁRIO.`,
+    `3.3. O atraso implica multa de 2% (dois por cento) sobre o valor devido, juros de 1% (um por cento) ao mês e correção monetária. Atraso superior a ${esc(val('p_tol')||'2')} dia(s) autoriza o LOCADOR a suspender a locação e recolher o veículo, independentemente de notificação.`];
+  if(kmLim)pay.push(`3.4. A franquia de quilometragem é de ${kmLim.toLocaleString('pt-BR')} km por semana. O excedente será cobrado a ${num(val('p_kmext'))?brl(num(val('p_kmext'))):'<mark>[R$/km]</mark>'} por km, junto com a parcela seguinte.`);
+  else pay.push(`3.4. A quilometragem é livre.`);
+  C.push({h:'Cláusula 3ª – Do valor e do pagamento',p:pay});
+  C.push({h:num(val('p_caucao'))?'Cláusula 4ª – Da caução':'Cláusula 4ª – Dos débitos do LOCATÁRIO',p:!num(val('p_caucao'))?[
+    `4.1. Os débitos do LOCATÁRIO, como aluguéis em aberto, multas de trânsito, avarias, franquia, combustível faltante, lavagem e km excedente, serão pagos em até 5 (cinco) dias após a notificação, ainda que cheguem depois da devolução do veículo, podendo ser cobrados junto com a parcela semanal seguinte.`
+  ]:[
+    `4.1. O LOCATÁRIO entrega ao LOCADOR, a título de caução, ${money(val('p_caucao'))}.`,
+    val('p_cdev')==='ato'?`4.2. A caução será devolvida no ato da devolução do veículo, logo após a vistoria, descontados aluguéis em aberto, avarias, franquia, combustível faltante, lavagem, km excedente e demais débitos do LOCATÁRIO. Multas de trânsito do período da locação que chegarem depois serão pagas pelo LOCATÁRIO em até 5 (cinco) dias após a notificação.`:
+    `4.2. A caução será devolvida em até 30 (trinta) dias após a devolução do veículo, prazo necessário para a chegada de eventuais multas de trânsito, descontados aluguéis em aberto, multas, avarias, franquia, combustível faltante, km excedente e demais débitos do LOCATÁRIO. Débitos acima da caução serão pagos em até 5 (cinco) dias após a notificação.`
+  ]});
+  C.push({h:'Cláusula 5ª – Da utilização e do condutor',p:[
+    `5.1. O veículo destina-se a ${uso==='app'?'uso do LOCATÁRIO como motorista de aplicativos de transporte de passageiros e de entregas, sendo responsabilidade do LOCATÁRIO manter o cadastro regular nas plataformas':'uso particular do LOCATÁRIO, vedado o uso comercial ou em aplicativos de transporte'}.`,
+    `5.2. Somente o LOCATÁRIO poderá conduzir o veículo${val('u_cond')?', além do condutor adicional '+esc(val('u_cond'))+', pelo qual o LOCATÁRIO responde solidariamente':''}. É proibido emprestar, sublocar, ceder ou dar o veículo em garantia.`,
+    `5.3. O veículo poderá circular somente ${est}, salvo autorização por escrito do LOCADOR.`,
+    `5.4. É proibido: dirigir sob efeito de álcool ou drogas; participar de corridas ou testes; rebocar; transportar carga ou número de passageiros acima do permitido; transportar produtos ilícitos, inflamáveis ou animais sem proteção; trafegar em vias inadequadas; alterar características do veículo; e fumar no interior.`,
+    `5.5. O LOCATÁRIO deve manter a CNH válida durante toda a locação e comunicar imediatamente qualquer suspensão ou cassação.`
+  ]});
+  C.push({h:'Cláusula 6ª – Da manutenção e conservação',p:[
+    `6.1. Correm por conta do LOCATÁRIO: combustível, lavagem, estacionamento, pedágios, calibragem e reposição de água e óleo entre revisões.`,
+    `6.2. O LOCATÁRIO levará o veículo à revisão a cada ${esc(val('p_rev')||'5.000')} km em oficina indicada pelo LOCADOR, que arcará com o custo da manutenção preventiva e do desgaste natural de peças.`,
+    `6.3. Qualquer luz de alerta no painel ou ruído anormal deve ser comunicado ao LOCADOR imediatamente, sendo vedado prosseguir viagem em condições que agravem o dano. Danos por mau uso ou negligência serão pagos pelo LOCATÁRIO.`,
+    `6.4. Parado o veículo por defeito mecânico não causado pelo LOCATÁRIO, os dias de paralisação serão abatidos do aluguel.`
+  ]});
+  const segP=[`7.1. O veículo conta com ${SEG[seg]}${seg!=='nenhum'?`${val('s_cia')?', junto a '+esc(val('s_cia')):''}${val('s_apol')?', apólice/contrato nº '+esc(val('s_apol')):''}`:''}.`];
+  if(seg!=='nenhum'){
+    if(num(val('s_terc'))&&seg!=='roubo')segP.push(`7.2. A cobertura para danos a terceiros é limitada a ${brl(num(val('s_terc')))}. Valores acima desse limite serão de responsabilidade do LOCATÁRIO.`);
+    else segP.push(`7.2. Valores não cobertos ou acima dos limites da apólice serão de responsabilidade do LOCATÁRIO quando este der causa ao evento.`);
+    segP.push(`7.3. Em todo sinistro, o LOCATÁRIO pagará a franquia/cota de participação de ${num(val('s_fran'))?money(val('s_fran')):'<mark>[valor da franquia]</mark>'}, além das diárias do período em que o veículo ficar parado, limitadas a 15 (quinze) dias.`);
+    if(assist.length)segP.push(`7.4. Assistências incluídas: ${esc(listar(assist))}.`);
+    segP.push(`7.${assist.length?5:4}. A cobertura perde efeito, ficando o LOCATÁRIO responsável pelo valor integral dos danos, quando o sinistro ocorrer por embriaguez, uso de drogas, condutor não autorizado ou sem habilitação válida, uso proibido por este contrato, ou falta de comunicação e de Boletim de Ocorrência.`);
+  }else segP.push(`7.2. Não havendo seguro, o LOCATÁRIO responde integralmente pelos danos ao veículo, até o valor de referência de mercado (tabela FIPE), e pelos danos causados a terceiros e passageiros durante a locação.`);
+  C.push({h:'Cláusula 7ª – Do seguro e da proteção',p:segP});
+  C.push({h:'Cláusula 8ª – Dos acidentes, roubo e furto',p:[
+    `8.1. Em acidente, roubo ou furto, o LOCATÁRIO deve avisar o LOCADOR imediatamente e registrar Boletim de Ocorrência em até 24 (vinte e quatro) horas, entregando cópia ao LOCADOR.`,
+    `8.2. Em acidente, o LOCATÁRIO não deve assumir culpa nem fazer acordo com terceiros sem autorização do LOCADOR, devendo anotar placa, dados do outro condutor e testemunhas, e fotografar o local.`,
+    `8.3. O LOCATÁRIO responde civil e criminalmente pelos atos praticados na condução do veículo durante a locação, isentando o LOCADOR perante terceiros.`
+  ]});
+  C.push({h:'Cláusula 9ª – Das multas de trânsito',p:[
+    `9.1. As infrações cometidas entre a entrega e a efetiva devolução do veículo são de responsabilidade do LOCATÁRIO, que pagará as multas e assumirá a pontuação em sua CNH.`,
+    `9.2. Recebida a notificação, o LOCATÁRIO assinará a indicação de condutor em até 5 (cinco) dias. Não o fazendo, pagará também a multa por não identificação do condutor (multa NIC), se aplicada.`,
+    `9.3. Guincho, pátio e diárias de apreensão por culpa do LOCATÁRIO correm por conta dele, mantido o aluguel do período.`
+  ]});
+  C.push({h:'Cláusula 10ª – Do rastreamento e dos dados pessoais',p:[
+    `10.1. ${itens.includes('rastreador')?'O veículo possui rastreador.':'O veículo poderá receber rastreador.'} O LOCATÁRIO autoriza o monitoramento da localização para proteção do bem e o bloqueio remoto em caso de inadimplência, roubo ou uso indevido, desde que o veículo esteja parado.`,
+    `10.2. O LOCATÁRIO autoriza o uso de seus dados pessoais e cópia da CNH exclusivamente para execução deste contrato, indicação de condutor e cobrança, nos termos da Lei nº 13.709/2018 (LGPD).`
+  ]});
+  C.push({h:'Cláusula 11ª – Da devolução',p:[
+    `11.1. O veículo é entregue limpo e abastecido e deverá ser devolvido no endereço do LOCADOR, ou em local por ele indicado, nas mesmas condições: limpo por dentro e por fora, com o tanque no mesmo nível da saída (${esc(val('v_tanque')).toLowerCase()}), com todos os acessórios e documentos.`,
+    `11.2. Na saída e na devolução será feita vistoria, registrada no Termo de Vistoria anexo e assinada pelas partes, com quilometragem, nível de combustível, limpeza e avarias. A quilometragem de devolução serve para a conferência do limite de km e das revisões.`,
+    `11.3. O combustível faltante será cobrado pelo preço do litro no posto mais próximo. Veículo devolvido sujo pagará taxa de lavagem de ${num(val('p_lavagem'))?money(val('p_lavagem')):'<mark>[taxa de lavagem]</mark>'}.`,
+    `11.4. As avarias novas apontadas na vistoria de devolução serão avaliadas e orçadas em oficina de confiança do LOCADOR. O LOCATÁRIO pagará o reparo, ou a franquia quando o seguro for acionado${num(val('p_caucao'))?', podendo o valor ser descontado da caução':', no prazo da cláusula 4.1'}.`
+  ]});
+  C.push({h:'Cláusula 12ª – Da rescisão',p:[
+    `12.1. O LOCATÁRIO pode encerrar a locação a qualquer tempo, sem multa, na forma da cláusula 2.3. O LOCADOR pode encerrá-la com aviso prévio por escrito de 7 (sete) dias, ressalvadas as hipóteses do item 12.2.`,
+    `12.2. O contrato se rescinde de pleno direito, com retomada imediata do veículo, em caso de: atraso superior ao previsto na cláusula 3.3; sublocação ou condutor não autorizado; uso ilícito ou proibido; suspensão ou cassação da CNH; ou informações falsas.`,
+    `12.3. Rescindido o contrato, o LOCATÁRIO devolverá o veículo em até 24 (vinte e quatro) horas. A não devolução poderá configurar apropriação indébita (art. 168 do Código Penal), autorizando as medidas policiais e judiciais cabíveis.`,
+    `12.4. A parte que descumprir este contrato pagará multa de ${num(val('p_multa'))?money(val('p_multa')):'<mark>[multa contratual]</mark>'}, sem prejuízo de perdas e danos.`
+  ]});
+  const fin=[`13.1. Este contrato não gera vínculo empregatício ou societário entre as partes.`,
+    `13.2. Alterações só valem por escrito. A tolerância com algum descumprimento não significa renúncia a direitos.`];
+  if(val('obs'))fin.push(`13.3. Condições adicionais: ${esc(val('obs'))}`);
+  fin.push(`13.${val('obs')?4:3}. Fica eleito o foro da Comarca de ${esc(val('cidade')||'Curitiba/PR')} para resolver questões deste contrato, com renúncia a qualquer outro.`);
+  fin.push(`E, por estarem de acordo, as partes assinam este contrato em 2 (duas) vias de igual teor, sendo válida também a assinatura eletrônica aposta neste documento.`);
+  C.push({h:'Cláusula 13ª – Disposições finais e foro',p:fin});
+  return {C,sched};
+}
+function vistoria(){return[['Data e hora',`${fds(val('d_ini'))||''} ${val('d_hora')||''}`.trim()],['Quilometragem',val('v_km')?val('v_km')+' km':''],['Combustível',val('v_tanque')],['Limpeza',val('v_limpeza')],['Avarias',val('v_avarias')||'Nenhuma']]}
+function dateLine(){
+  const d=pd(val('d_ini'))||new Date();
+  return `${val('cidade')||'Curitiba/PR'}, ${d.getDate()} de ${MESES[d.getMonth()]} de ${d.getFullYear()}.`;
+}
+
+/* ---------- prévia ---------- */
+function render(){
+  const {C,sched}=build();
+  contractNo='GAC-'+(val('v_placa').toUpperCase()||'XXX')+'-'+(val('d_ini')||new Date().toISOString().slice(0,10)).replace(/-/g,'');
+  $('#cno').textContent=contractNo;
+  $('#plateNum').textContent=(val('v_placa')||'AUC3C73').toUpperCase();
+  let h=`<p class="no" style="margin:0 0 2px">GAC LOCAÇÕES DE VEÍCULOS</p><h3>Contrato de Locação de Veículo</h3><p class="no">Nº ${esc(contractNo)}</p>`;
+  for(const c of C){h+=`<h4>${c.h}</h4>`+c.p.map(p=>`<p>${p}</p>`).join('');
+    if(c.h.startsWith('Cláusula 3ª')&&sched.length){h+=`<p>3.5. Cronograma:</p><div style="overflow-x:auto"><table><thead><tr><th>Parcela</th><th>Vencimento</th><th>Valor</th></tr></thead><tbody>${sched.slice(0,8).map(r=>`<tr><td>${r.n}</td><td>${fd(r.d)}</td><td>${brl(r.v)}</td></tr>`).join('')}${sched.length>8?`<tr><td colspan="3">… mais ${sched.length-8} parcela(s) no PDF</td></tr>`:''}</tbody></table></div>`}}
+  h+=`<p style="margin-top:14px">${esc(dateLine())}</p><div class="sgrid">`;
+  const sl=(img,t)=>`<div class="sline">${img?`<img src="${img}" alt="">`:''}${t}</div>`;
+  h+=sl(sigData('ld'),'LOCADOR<br>'+F(val('ld_nome'),'nome'))+sl(sigData('lt'),'LOCATÁRIO<br>'+F(val('lt_nome'),'nome'))+'</div>';
+  h+=`<h4>Anexo – Termo de vistoria</h4><div style="overflow-x:auto"><table><thead><tr><th>Item</th><th>Saída</th><th>Devolução</th></tr></thead><tbody>${vistoria().map(r=>`<tr><td>${r[0]}</td><td>${esc(r[1])}</td><td>__________</td></tr>`).join('')}<tr><td>Km rodados</td><td>—</td><td>__________</td></tr></tbody></table></div>`;
+  $('#paper').innerHTML=h;
+  // resumo
+  const tot=sched.length*(num(val('p_sem'))||0);
+  $('#summary').innerHTML=[['Semanal',brl(num(val('p_sem')))||'—'],['Parcelas',sched.length||'—'],['Total do período',tot?brl(tot):'—'],['Caução',brl(num(val('p_caucao')))||'Isenta'],['Fim do período',fds(val('d_fim'))||'—']].map(([a,b])=>`<div><small>${a}</small><strong>${b}</strong></div>`).join('');
+  $('#schedBody').innerHTML=sched.length?sched.map(r=>`<tr><td>${r.n}</td><td>${fd(r.d)} · ${DIAS[r.d.getDay()].split('-')[0]}</td><td>${brl(r.v)}</td></tr>`).join(''):`<tr><td colspan="3">Informe o valor semanal, o 1º vencimento e a devolução na etapa 4.</td></tr>`;
+  // pendências
+  const req=[['ld_nome','nome do locador'],['ld_doc','CPF/CNPJ do locador'],['lt_nome','nome do cliente'],['lt_cpf','CPF do cliente'],['lt_end','endereço do cliente'],['cnh_num','nº da CNH'],['cnh_val','validade da CNH'],['v_renavam','RENAVAM'],['d_ini','data de entrega'],['d_fim','data de devolução'],['p_sem','valor semanal'],['p_1venc','1º vencimento']];
+  const miss=req.filter(([id])=>!val(id)).map(r=>r[1]);
+  $('#missing').hidden=!miss.length;
+  $('#missing').innerHTML=miss.length?`<b>Faltam ${miss.length} dado(s):</b><ul>${miss.map(m=>`<li>${m}</li>`).join('')}</ul>Você ainda pode gerar o PDF; os campos vazios saem marcados para preencher à mão.`:'';
+  // CNH vencida
+  const cv=pd(val('cnh_val')),fim=pd(val('d_fim'));
+  const w=$('#cnhWarn');
+  if(cv&&cv<new Date(new Date().toDateString())){w.hidden=false;w.innerHTML='<div class="missing">A CNH está vencida. Não entregue o carro sem habilitação válida.</div>'}
+  else if(cv&&fim&&cv<fim){w.hidden=false;w.innerHTML='<div class="missing">A CNH vence antes do fim da locação ('+fd(cv)+'). Peça a renovação antes dessa data.</div>'}
+  else w.hidden=true;
+  $$('.segx').forEach(e=>e.hidden=radio('seg')==='nenhum');
+  {const is=$('input[name="isento"]').checked;$('#p_caucao').disabled=is;$('#p_cdev').disabled=is}
+  $$('#tabs button').forEach((b,i)=>b.classList.toggle('done',stepDone(i)));
+  saveDraft();
+}
+function stepDone(i){
+  const map=[['ld_nome','ld_doc','ld_end'],['lt_nome','lt_cpf','cnh_num','cnh_val'],['v_placa','v_renavam','v_km'],['d_ini','d_fim','p_sem','p_1venc'],[]];
+  return map[i].length&&map[i].every(id=>val(id));
+}
+
+/* ---------- etapas ---------- */
+function go(i){
+  step=Math.max(0,Math.min(4,i));
+  $$('.step').forEach(s=>s.hidden=+s.dataset.step!==step);
+  $$('#tabs button').forEach((b,k)=>b.setAttribute('aria-selected',k===step));
+  $('#prev').disabled=step===0;
+  $('#next').hidden=step===4;
+  if(step===4)setTimeout(()=>{sizePads()},0);
+  $('#tabs').scrollIntoView({block:'nearest',behavior:'smooth'});
+}
+$$('#tabs button').forEach(b=>b.onclick=()=>go(+b.dataset.s));
+$('#prev').onclick=()=>go(step-1);
+$('#next').onclick=()=>go(step+1);
+$('#form').addEventListener('input',render);
+$('#form').addEventListener('change',render);
+$('#form').addEventListener('submit',e=>e.preventDefault());
+
+// entrega muda → sugere 1º vencimento = entrega
+const isoL=d=>d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
+function calcFim(){const m=+val('d_prazo'),s=pd(val('d_ini'));if(!m||!s)return;const f=new Date(s);f.setMonth(f.getMonth()+m);$('#d_fim').value=isoL(f)}
+$('#d_ini').addEventListener('change',()=>{if(!val('p_1venc'))$('#p_1venc').value=val('d_ini');calcFim();render()});
+$('#d_prazo').addEventListener('change',()=>{calcFim();render()});
+$('#d_fim').addEventListener('change',()=>{$('#d_prazo').value='0';render()});
+
+/* ---------- CNH foto ---------- */
+$('#cnh_foto').addEventListener('change',e=>{
+  const f=e.target.files[0];if(!f)return;
+  const r=new FileReader();r.onload=()=>{const img=new Image();img.onload=()=>{
+    const max=1400,k=Math.min(1,max/Math.max(img.width,img.height));const c=document.createElement('canvas');
+    c.width=img.width*k;c.height=img.height*k;const x=c.getContext('2d');x.fillStyle='#fff';x.fillRect(0,0,c.width,c.height);x.drawImage(img,0,0,c.width,c.height);
+    cnhData={src:c.toDataURL('image/jpeg',.85),w:c.width,h:c.height};$('#cnhPrev').src=cnhData.src;$('#cnhPrev').hidden=false};img.src=r.result};r.readAsDataURL(f);
+});
+
+/* ---------- assinaturas ---------- */
+const pads={};
+function makePad(key){
+  const cv=$('#sig_'+key),ctx=cv.getContext('2d');const p={cv,ctx,empty:true,draw:false};
+  const pos=e=>{const r=cv.getBoundingClientRect();return[e.clientX-r.left,e.clientY-r.top]};
+  cv.addEventListener('pointerdown',e=>{p.draw=true;cv.setPointerCapture(e.pointerId);const[x,y]=pos(e);ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x+.1,y+.1);ctx.stroke()});
+  cv.addEventListener('pointermove',e=>{if(!p.draw)return;const[x,y]=pos(e);ctx.lineTo(x,y);ctx.stroke();p.empty=false});
+  const end=()=>{if(p.draw){p.draw=false;if(!p.empty)render()}};
+  cv.addEventListener('pointerup',end);cv.addEventListener('pointercancel',end);
+  pads[key]=p;
+}
+function sizePads(){for(const k in pads){const p=pads[k],r=p.cv.getBoundingClientRect();if(!r.width)continue;
+  const dpr=window.devicePixelRatio||1;if(p.cv.width===Math.round(r.width*dpr))continue;
+  const old=p.empty?null:p.cv.toDataURL();p.cv.width=r.width*dpr;p.cv.height=r.height*dpr;
+  p.ctx.setTransform(dpr,0,0,dpr,0,0);p.ctx.lineWidth=2.2;p.ctx.lineCap='round';p.ctx.lineJoin='round';p.ctx.strokeStyle='#0d1b33';
+  if(old){const i=new Image();i.onload=()=>p.ctx.drawImage(i,0,0,r.width,r.height);i.src=old}}}
+function sigData(k){const p=pads[k];return p&&!p.empty?p.cv.toDataURL('image/png'):null}
+makePad('lt');makePad('ld');
+$$('[data-clear]').forEach(b=>b.onclick=()=>{const p=pads[b.dataset.clear];p.ctx.clearRect(0,0,p.cv.width,p.cv.height);p.empty=true;render()});
+window.addEventListener('resize',sizePads);
+
+/* ---------- PDF ---------- */
+function plain(html){const d=document.createElement('div');d.innerHTML=html.replace(/<mark>/g,'').replace(/<\/mark>/g,'');return d.textContent.replace(/\[(.+?)\]/g,'______________')}
+function makePdf(){
+  const {jsPDF}=window.jspdf;const doc=new jsPDF({unit:'mm',format:'a4'});
+  const W=210,M=20,TW=W-2*M;let y=M;
+  const need=h=>{if(y+h>282){doc.addPage();y=M}};
+  doc.setFont('helvetica','bold');doc.setFontSize(9);doc.setTextColor(31,79,163);doc.text('GAC LOCAÇÕES DE VEÍCULOS',W/2,y,{align:'center'});doc.setTextColor(0);y+=6;
+  doc.setFontSize(14);doc.text('CONTRATO DE LOCAÇÃO DE VEÍCULO',W/2,y,{align:'center'});y+=6;
+  doc.setFont('helvetica','normal');doc.setFontSize(9);doc.setTextColor(90);doc.text('Nº '+contractNo,W/2,y,{align:'center'});doc.setTextColor(0);y+=8;
+  const {C,sched}=build();
+  for(const c of C){
+    need(12);doc.setFont('helvetica','bold');doc.setFontSize(10.5);doc.text(c.h.toUpperCase(),M,y);y+=5.5;
+    doc.setFont('helvetica','normal');doc.setFontSize(10);
+    for(const p of c.p){const lines=doc.splitTextToSize(plain(p),TW);for(const l of lines){need(5);doc.text(l,M,y);y+=4.6}y+=1.6}
+    if(c.h.startsWith('Cláusula 3ª')&&sched.length){
+      need(10);doc.text('3.5. Cronograma de pagamentos:',M,y);y+=5;
+      doc.setFontSize(9);const cols=3,rows=Math.ceil(sched.length/cols),cw=TW/cols;
+      for(let r=0;r<rows;r++){need(4.6);for(let k=0;k<cols;k++){const it=sched[k*rows+r];if(it)doc.text(`${String(it.n).padStart(2,'0')}  ${fd(it.d)}  ${brl(it.v)}`,M+k*cw,y)}y+=4.4}
+      y+=2;doc.setFontSize(10);
+    }
+    y+=2;
+  }
+  need(14);doc.text(dateLine(),M,y);y+=8;
+  // assinaturas
+  const boxes=[['LOCADOR',val('ld_nome'),val('ld_doc'),sigData('ld')],['LOCATÁRIO',val('lt_nome'),val('lt_cpf'),sigData('lt')]];
+  const bw=(TW-12)/2;
+  for(let i=0;i<2;i+=2){need(36);
+    for(let k=0;k<2;k++){const[b,n,d,img]=boxes[i+k],x=M+k*(bw+12);
+      if(img)doc.addImage(img,'PNG',x+bw/2-30,y,60,18);
+      doc.line(x,y+20,x+bw,y+20);doc.setFontSize(9);doc.setFont('helvetica','bold');doc.text(b,x+bw/2,y+24,{align:'center'});
+      doc.setFont('helvetica','normal');doc.text(n||'Nome: ______________________',x+bw/2,y+28,{align:'center'});doc.text(d?'CPF/CNPJ: '+d:'CPF: ______________________',x+bw/2,y+32,{align:'center'})}
+    y+=38}
+  if(pads.lt&&!pads.lt.empty)doc.setFontSize(8),doc.setTextColor(100),doc.text('Assinado eletronicamente na tela do dispositivo em '+new Date().toLocaleString('pt-BR')+'.',M,Math.min(y,285)),doc.setTextColor(0);
+  // termo de vistoria
+  {doc.addPage();y=M;doc.setFont('helvetica','bold');doc.setFontSize(12);doc.text('ANEXO – TERMO DE VISTORIA (SAÍDA E DEVOLUÇÃO)',M,y);y+=5;
+   doc.setFont('helvetica','normal');doc.setFontSize(9);doc.setTextColor(90);doc.text(`${val('v_modelo')} · placa ${val('v_placa').toUpperCase()} · contrato ${contractNo}`,M,y);doc.setTextColor(0);y+=7;
+   const cw=[38,(TW-38)/2,(TW-38)/2];
+   const rows=[['Item','Saída (entrega)','Devolução'],...vistoria().map(r=>[r[0],r[1],'']),['Km rodados','—',''],['Assinatura do locador','',''],['Assinatura do locatário','','']];
+   rows.forEach((r,i)=>{doc.setFont('helvetica',i===0?'bold':'normal');doc.setFontSize(9.5);
+     const L=r.map((t,k)=>doc.splitTextToSize(String(t||''),cw[k]-4));let hg=Math.max(10,...L.map(l=>l.length*4.4+4));
+     if(r[0]==='Avarias')hg=Math.max(hg,32);if(r[0].startsWith('Assinatura'))hg=18;
+     let x=M;r.forEach((t,k)=>{if(i===0){doc.setFillColor(232,238,248);doc.rect(x,y,cw[k],hg,'F')}doc.rect(x,y,cw[k],hg);doc.text(L[k],x+2,y+6);x+=cw[k]});y+=hg});
+   y+=8;doc.setFontSize(9);doc.text(doc.splitTextToSize('O veículo é entregue limpo e abastecido e deve ser devolvido nas mesmas condições. Combustível faltante, lavagem e avarias novas apontadas nesta vistoria serão cobrados conforme a cláusula 11ª.',TW),M,y)}
+  // anexo CNH
+  if(cnhData){doc.addPage();y=M;doc.setFont('helvetica','bold');doc.setFontSize(12);doc.text('ANEXO I – CÓPIA DA CNH DO LOCATÁRIO',M,y);y+=8;
+    const k=Math.min(TW/cnhData.w,200/cnhData.h);doc.addImage(cnhData.src,'JPEG',M,y,cnhData.w*k,cnhData.h*k)}
+  // rodapé
+  const n=doc.getNumberOfPages();for(let i=1;i<=n;i++){doc.setPage(i);doc.setFontSize(8);doc.setTextColor(120);
+    doc.text(`${contractNo} · Página ${i} de ${n}`,M,292);doc.text('Rubricas: ________  ________',W-M,292,{align:'right'});doc.setTextColor(0)}
+  return doc;
+}
+const dl={save:async({filename,data})=>{const url=URL.createObjectURL(data);const a=document.createElement('a');a.href=url;a.download=filename;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),60000);return{status:'saved'}}};
+$('#btnPdf').onclick=async()=>{
+  const st=$('#status');st.className='status';
+  if(!window.jspdf){st.className='status err';st.textContent='O gerador de PDF não carregou. Recarregue a página e tente de novo.';return}
+  st.textContent='Gerando PDF…';
+  try{const doc=makePdf();const blob=doc.output('blob');
+    const nome=(val('lt_nome').split(' ')[0]||'cliente').normalize('NFD').replace(/[^\w]/g,'');
+    let salvo=false;try{await salvarContrato();salvo=true}catch(e){}
+    await dl.save({filename:`Contrato-${val('v_placa').toUpperCase()}-${nome}.pdf`,data:blob});
+    st.className='status ok';st.textContent='PDF salvo. Envie pelo WhatsApp ou imprima em 2 vias.'+(salvo?' As parcelas já estão na aba Pagamentos.':'');
+  }catch(e){st.className='status err';st.textContent=e&&e.code==='declined'?'Download cancelado.':'Não foi possível salvar o PDF ('+(e&&e.code||e?.message||'erro')+').'}
+};
+
+/* ---------- rascunho ---------- */
+function allIds(){return $$('#form input[id],#form select[id],#form textarea[id]').filter(e=>e.type!=='file').map(e=>e.id)}
+function saveDraft(){try{
+  const d={};allIds().forEach(id=>d[id]=$('#'+id).value);
+  d._r={uso:radio('uso'),seg:radio('seg'),itens:checks('itens'),assist:checks('assist'),isento:!!$('input[name="isento"]').checked};
+  localStorage.setItem(KEY_DRAFT,JSON.stringify(d));
+  const l={};LD_FIELDS.forEach(id=>l[id]=val(id));localStorage.setItem(KEY_LD,JSON.stringify(l));
+}catch(e){}}
+function loadDraft(){try{
+  const d=JSON.parse(localStorage.getItem(KEY_DRAFT)||'null');
+  if(d){for(const id in d)if(id!=='_r'&&$('#'+id))$('#'+id).value=d[id];
+    if(d._r){const r=d._r;['uso','seg'].forEach(n=>{const i=$(`input[name="${n}"][value="${r[n]}"]`);if(i)i.checked=true});
+      ['itens','assist'].forEach(n=>$$(`input[name="${n}"]`).forEach(i=>i.checked=(r[n]||[]).includes(i.value)));$('input[name="isento"]').checked=!!r.isento}}
+  else{const l=JSON.parse(localStorage.getItem(KEY_LD)||'null');if(l)for(const id in l)if(l[id])$('#'+id).value=l[id]}
+}catch(e){}
+  if(!$('#p_caucao').value)$('#p_caucao').value='1000';if(!$('#p_cdev').value)$('#p_cdev').value='ato';}
+$('#btnNovo').onclick=()=>{$('#confirmNovo').hidden=false};
+$('#novoNao').onclick=()=>{$('#confirmNovo').hidden=true};
+$('#novoSim').onclick=()=>{
+  const keep={};LD_FIELDS.forEach(id=>keep[id]=val(id));
+  const veic=['v_modelo','v_ano','v_placa','v_cor','v_comb','v_renavam','v_chassi','v_valor'].reduce((a,id)=>(a[id]=val(id),a),{});
+  $('#form').reset();Object.entries({...keep,...veic}).forEach(([k,v])=>$('#'+k).value=v);
+  cnhData=null;$('#cnhPrev').hidden=true;for(const k in pads){const p=pads[k];p.ctx.clearRect(0,0,p.cv.width,p.cv.height);p.empty=true}
+  $('#confirmNovo').hidden=true;$('#status').textContent='';render();go(1);
+};
+
+/* ---------- controle de pagamentos ---------- */
+let db=null,dbReady=false,dbErr=null,contratos=new Map();const busy=new Set();const ui={confirm:null};
+const hojeISO=()=>isoL(new Date());
+const dif=(a,b)=>Math.round((pd(a)-pd(b))/864e5);
+const cloneJ=o=>JSON.parse(JSON.stringify(o));
+const sb=supabase.createClient('https://xwigxnambkrlmlbskxrr.supabase.co','sb_publishable_tbh9CloCjjPil6-EDdR4Og_ef391liA',{auth:{persistSession:true,autoRefreshToken:true}});
+function mkDb(){
+  const subs=[];const err=e=>({code:e?.code||e?.message||'erro',message:e?.message||''});
+  async function refresh(){const{data,error}=await sb.from('contratos').select('id,dados');
+    if(error){subs.forEach(s=>s.e&&s.e(err(error)));return}
+    const snap={docs:data.map(r=>({id:r.id,exists:true,data:()=>r.dados}))};subs.forEach(s=>s.n(snap))}
+  const ref=(t,k,col)=>({
+    get:async()=>{const{data,error}=await sb.from(t).select('dados').eq(col,k).maybeSingle();if(error)throw err(error);return{exists:!!data,data:()=>data?.dados}},
+    set:async d=>{const row={[col]:k,dados:d,atualizado_em:new Date().toISOString()};const{error}=await sb.from(t).upsert(row);if(error)throw err(error);if(t==='contratos')refresh()},
+    update:async d=>{const{data,error}=await sb.from(t).select('dados').eq(col,k).maybeSingle();if(error)throw err(error);if(!data)throw{code:'not_found'};
+      const{error:e2}=await sb.from(t).update({dados:{...data.dados,...d},atualizado_em:new Date().toISOString()}).eq(col,k);if(e2)throw err(e2);if(t==='contratos')refresh()},
+    delete:async()=>{const{error}=await sb.from(t).delete().eq(col,k);if(error)throw err(error);if(t==='contratos')refresh()}});
+  return{refresh,
+    collection:n=>({doc:id=>ref('contratos',id,'id'),onSnapshot:(n2,e)=>{subs.push({n:n2,e});refresh();return()=>{}}}),
+    doc:path=>ref('config',path.split('/')[1],'chave')};
+}
+function startDb(){db=mkDb();
+  document.addEventListener('visibilitychange',()=>{if(!document.hidden)db.refresh()});setInterval(()=>{if(!document.hidden)db.refresh()},60000);
+  {db.collection('contratos').onSnapshot(s=>{contratos=new Map(s.docs.map(d=>[d.id,cloneJ(d.data())]));dbReady=true;renderPag()},e=>{dbErr=e.code;dbReady=true;renderPag()});loadConfig();loadMembros()}}
+const kmInt=s=>{const d=String(s??'').replace(/\D/g,'');return d?+d:null};
+const kmF=n=>n==null?'—':n.toLocaleString('pt-BR')+' km';
+async function salvarContrato(){
+  if(!db)throw{code:'nodb'};
+  const sched=schedule();if(!sched.length)throw{code:'nosched'};
+  const id=contractNo.replace(/[^\w.~:@+-]/g,'-');
+  const ref=db.collection('contratos').doc(id);
+  const old=await ref.get();const od=old.exists?cloneJ(old.data()):null;const prev=od?.parcelas||[];
+  const parcelas=sched.map(r=>{const v=isoL(r.d),p=prev.find(x=>x.venc===v);return{n:r.n,venc:v,valor:r.v,pago:!!p?.pago,pagoEm:p?.pagoEm||null}});
+  await ref.set({numero:contractNo,cliente:{nome:val('lt_nome'),cpf:val('lt_cpf'),tel:val('lt_tel')},veiculo:{placa:val('v_placa').toUpperCase(),modelo:val('v_modelo')},
+    inicio:val('d_ini'),fim:val('d_fim'),semanal:num(val('p_sem')),caucao:num(val('p_caucao'))||0,pix:val('ld_pix'),status:'ativo',
+    entrega:{data:val('d_ini'),km:kmInt(val('v_km')),tanque:val('v_tanque'),limpeza:val('v_limpeza'),avarias:val('v_avarias')||'Nenhuma'},parcelas,criadoEm:od?.criadoEm||new Date().toISOString()});
+}
+$('#btnSalvarC').onclick=async()=>{const st=$('#status');st.className='status';
+  if(!db){st.className='status err';st.textContent='Sem conexão com o banco de dados. Verifique a internet e entre de novo.';return}
+  st.textContent='Salvando…';
+  try{await salvarContrato();st.className='status ok';st.textContent='Contrato salvo. As parcelas estão na aba Pagamentos.'}
+  catch(e){st.className='status err';st.textContent=e.code==='nosched'?'Preencha o valor semanal, o 1º vencimento e o fim do período antes de salvar.':'Não foi possível salvar ('+(e.code||'erro')+'). Tente de novo.'}};
+
+function stParc(p){if(p.pago)return['pago','Pago'];const d=dif(p.venc,hojeISO());
+  if(d<0)return['atr',`Atrasada ${-d} dia${d<-1?'s':''}`];if(d===0)return['hoje','Vence hoje'];if(d<=2)return['prox',d===1?'Vence amanhã':'Em 2 dias'];return['fut','A vencer']}
+function msgCobranca(c,p){const nome=(c.cliente?.nome||'').split(' ')[0];const d=dif(p.venc,hojeISO());
+  const q=d<0?`venceu em ${fds(p.venc)} e está em aberto há ${-d} dia${d<-1?'s':''}`:d===0?'vence hoje':d===1?'vence amanhã':`vence em ${fds(p.venc)}`;
+  return `Olá${nome?', '+nome:''}! Aqui é da GAC Locações de Veículos.\n\nA parcela ${p.n} do aluguel do ${c.veiculo?.modelo||'veículo'} (placa ${c.veiculo?.placa||''}), no valor de ${brl(p.valor)}, ${q}.\n\n${c.pix?'PIX: '+c.pix+'\n\n':''}Depois de pagar, envie o comprovante por aqui. Obrigado!`}
+function waLink(c,p){let t=(c.cliente?.tel||'').replace(/\D/g,'');if(t&&t.length<=11)t='55'+t;return `https://wa.me/${t}?text=${encodeURIComponent(msgCobranca(c,p))}`}
+
+function renderPag(){
+  const body=$('#pagBody'),tiles=$('#tiles');
+  if(!dbReady){body.innerHTML='<div class="empty">Carregando contratos…</div>';tiles.innerHTML='';return}
+  if(!db||dbErr){tiles.innerHTML='';body.innerHTML='<div class="empty">Não foi possível carregar os contratos. Verifique a internet e toque em Sair e entre de novo.</div>';return}
+  const hoje=hojeISO(),all=[...contratos.entries()].sort((a,b)=>(b[1].inicio||'').localeCompare(a[1].inicio||''));
+  const ativos=all.filter(([,c])=>c.status!=='encerrado'),enc=all.filter(([,c])=>c.status==='encerrado');
+  let atr=0,nAtr=0,sem=0,rec=0;const mes=hoje.slice(0,7);
+  for(const[,c]of all)for(const p of c.parcelas||[]){if(p.pago){if((p.pagoEm||'').slice(0,7)===mes)rec+=p.valor||0}else{const d=dif(p.venc,hoje);if(d<0){atr+=p.valor||0;nAtr++}else if(d<=6)sem+=p.valor||0}}
+  tiles.innerHTML=`<div class="tile${atr?' late':''}"><small>Em atraso</small><strong>${brl(atr)}</strong></div><div class="tile"><small>A receber em 7 dias</small><strong>${brl(sem)}</strong></div><div class="tile"><small>Recebido em ${MESES[new Date().getMonth()]}</small><strong>${brl(rec)}</strong></div><div class="tile"><small>Carros alugados</small><strong>${ativos.length}</strong></div>`;
+  const b=$('#lateBadge');b.hidden=!nAtr;b.textContent=nAtr;
+  const card=([id,c])=>{const isB=busy.has(id),dis=isB?' disabled':'';const ativo=c.status!=='encerrado';
+    let h=`<article class="ct"><header><span class="mini">${esc(c.veiculo?.placa||'')}</span><div class="who"><b>${esc(c.cliente?.nome||'Cliente sem nome')}</b><small>${esc(c.veiculo?.modelo||'')} · ${fds(c.inicio)||'—'} a ${fds(c.fim)||'—'} · ${brl(c.semanal)||'—'}/semana${c.entrega?.km!=null?' · saída '+kmF(c.entrega.km):''}${ativo?'':' · devolvido em '+fds(c.encerradoEm)}</small></div><div class="pacts">`;
+    if(ativo)h+=`<button class="btn small" data-act="renovar" data-id="${id}"${dis}>Renovar +1 mês</button><button class="btn small" data-act="ask-enc" data-id="${id}"${dis}>Devolução</button>`;
+    else h+=`<button class="btn small danger" data-act="ask-del" data-id="${id}"${dis}>Excluir</button>`;
+    h+=`</div></header>`;
+    if(!ativo&&c.devolucao){const d=c.devolucao;h+=`<div class="confirm"><span><b>Devolução:</b> ${kmF(d.km)}${d.kmRodados!=null?' ('+kmF(d.kmRodados)+' rodados)':''} · combustível ${esc(d.tanque)} · ${esc(d.limpeza)} · avarias: ${esc(d.avarias)}</span></div>`}
+    if(ui.confirm?.id===id&&ui.confirm.t==='enc'){const v=ui.confirm.vals||{};const sel=(nm,opts,def)=>`<select id="${nm}">${opts.map(o=>`<option${(v[nm]||def)===o?' selected':''}>${o}</option>`).join('')}</select>`;
+      h+=`<div class="confirm" style="display:grid;gap:10px"><b>Vistoria de devolução — ${fd(new Date())}</b>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px">
+        <div class="fx"><label for="dv_km">Km de devolução</label><input id="dv_km" inputmode="numeric" value="${esc(v.dv_km||'')}" placeholder="saída: ${kmF(c.entrega?.km)}"></div>
+        <div class="fx"><label for="dv_tanque">Combustível</label>${sel('dv_tanque',['Cheio','3/4','1/2','1/4','Reserva'],'Cheio')}</div>
+        <div class="fx"><label for="dv_limp">Limpeza</label>${sel('dv_limp',['Limpo por dentro e por fora','Limpeza parcial','Sujo'],'Limpo por dentro e por fora')}</div></div>
+        <div class="fx"><label for="dv_av">Avarias novas</label><textarea id="dv_av" placeholder="Nenhuma">${esc(v.dv_av||'')}</textarea></div>
+        <small>As parcelas que ainda não venceram saem da cobrança, sem multa. As atrasadas continuam.</small>
+        <div class="pacts" style="justify-content:flex-start"><button class="btn small primary" data-act="encerrar" data-id="${id}">Confirmar devolução</button><button class="btn small" data-act="cancel">Cancelar</button></div><span class="status err" id="dvErr"></span></div>`}
+    if(ui.confirm?.id===id&&ui.confirm.t==='del')h+=`<div class="confirm">Excluir este contrato e o histórico de pagamentos? Não dá para desfazer.<button class="btn small danger" data-act="excluir" data-id="${id}">Excluir</button><button class="btn small" data-act="cancel">Cancelar</button></div>`;
+    for(const p of c.parcelas||[]){const[k,l]=stParc(p);const dd=pd(p.venc);
+      h+=`<div class="prow"><span class="n">${String(p.n).padStart(2,'0')}</span><div class="d">${brl(p.valor)}<small>${fds(p.venc)} · ${DIAS[dd.getDay()].split('-')[0]}${p.pago&&p.pagoEm?' · pago em '+fds(p.pagoEm)+(p.forma?' via '+esc(p.forma):''):''}</small></div><span class="st ${k}">${l}</span><div class="pacts">`;
+      if(p.pago)h+=`<button class="btn small" data-act="desfazer" data-id="${id}" data-n="${p.n}"${dis}>Desfazer</button>`;
+      else h+=`<button class="btn small primary" data-act="pagar" data-id="${id}" data-n="${p.n}"${dis}>Marcar pago</button><a class="btn small wa" href="${waLink(c,p)}" target="_blank" rel="noopener">WhatsApp</a><button class="btn small" data-act="copiar" data-id="${id}" data-n="${p.n}">Copiar mensagem</button>`;
+      h+=`</div></div>`;
+      if(ui.confirm?.id===id&&ui.confirm.t==='pay'&&ui.confirm.n===p.n){const v=ui.confirm.vals||{};const fm=v.dv_forma||'PIX';
+        h+=`<div class="confirm" style="display:grid;gap:8px"><b>Receber parcela ${p.n} — ${brl(p.valor)}</b><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px"><div class="fx"><label for="dv_forma">Forma de pagamento</label><select id="dv_forma">${['PIX','Dinheiro','Cartão de débito','Cartão de crédito','Transferência'].map(o=>`<option${o===fm?' selected':''}>${o}</option>`).join('')}</select></div><div class="fx"><label for="dv_data">Data do pagamento</label><input id="dv_data" type="date" value="${esc(v.dv_data||hojeISO())}"></div></div><div class="pacts" style="justify-content:flex-start"><button class="btn small primary" data-act="pagar-ok" data-id="${id}" data-n="${p.n}">Confirmar pagamento</button><button class="btn small" data-act="cancel">Cancelar</button></div></div>`}}
+    return h+`</article>`};
+  body.innerHTML=(ativos.length?ativos.map(card).join(''):'<div class="empty"><b>Nenhum carro alugado no momento.</b><br>Na aba Novo contrato, etapa 5, toque em “Gerar PDF do contrato” ou “Salvar no controle de pagamentos”. O contrato aparece aqui com as parcelas e, no topo dele, os botões <b>Renovar +1 mês</b> e <b>Devolução</b>.</div>')
+    +(enc.length?`<p class="sect">Encerrados</p>`+enc.map(card).join(''):'');
+}
+async function act(id,fn){if(busy.has(id))return;busy.add(id);renderPag();const st=$('#pagStatus');st.className='status';st.textContent='';
+  try{await fn()}catch(e){st.className='status err';st.textContent='Não foi possível salvar ('+(e?.code||'erro')+'). Tente de novo.'}finally{busy.delete(id);renderPag()}}
+$('#pagBody').addEventListener('click',async e=>{
+  const b=e.target.closest('[data-act]');if(!b||b.tagName==='A')return;const id=b.dataset.id,a=b.dataset.act,n=+b.dataset.n;const c=contratos.get(id);
+  if(a==='cancel'){ui.confirm=null;renderPag();return}
+  if(a==='ask-enc'||a==='ask-del'){ui.confirm={id,t:a==='ask-enc'?'enc':'del'};renderPag();return}
+  if(!c)return;const ref=db.collection('contratos').doc(id);
+  if(a==='copiar'){const p=c.parcelas.find(x=>x.n===n);const m=msgCobranca(c,p);const st=$('#pagStatus');
+    try{await navigator.clipboard.writeText(m);st.className='status ok';st.textContent='Mensagem copiada. Cole no WhatsApp do cliente.'}catch(err){st.className='status';st.textContent=m}return}
+  if(a==='pagar'){ui.confirm={id,t:'pay',n};renderPag();return}
+  if(a==='pagar-ok'||a==='desfazer'){const ok=a==='pagar-ok';const g=k=>(document.getElementById(k)?.value||'').trim();const dt=ok?(g('dv_data')||hojeISO()):null,fm=ok?(g('dv_forma')||'PIX'):null;
+    const ps=cloneJ(c.parcelas).map(p=>p.n===n?{...p,pago:ok,pagoEm:dt,forma:fm}:p);ui.confirm=null;await act(id,()=>ref.update({parcelas:ps}));return}
+  if(a==='renovar'){const ps=cloneJ(c.parcelas);const nf=pd(c.fim);nf.setMonth(nf.getMonth()+1);let d=ps.length?pd(ps[ps.length-1].venc):pd(c.inicio);d.setDate(d.getDate()+7);
+    while(d<nf){ps.push({n:ps.length+1,venc:isoL(d),valor:c.semanal,pago:false,pagoEm:null});d=new Date(d);d.setDate(d.getDate()+7)}
+    await act(id,()=>ref.update({fim:isoL(nf),parcelas:ps}));$('#pagStatus').className='status ok';$('#pagStatus').textContent=`Contrato renovado até ${fd(nf)}.`;return}
+  if(a==='encerrar'){const g=k=>(document.getElementById(k)?.value||'').trim();const kmD=kmInt(g('dv_km')),kmS=c.entrega?.km??null;
+    if(kmD==null){$('#dvErr').textContent='Informe o km de devolução.';return}
+    if(kmS!=null&&kmD<kmS){$('#dvErr').textContent=`O km de devolução é menor que o de saída (${kmF(kmS)}).`;return}
+    const h=hojeISO();const ps=cloneJ(c.parcelas).filter(p=>p.pago||p.venc<=h);
+    const dev={data:h,km:kmD,tanque:g('dv_tanque'),limpeza:g('dv_limp'),avarias:g('dv_av')||'Nenhuma',kmRodados:kmS!=null?kmD-kmS:null};
+    ui.confirm=null;await act(id,()=>ref.update({status:'encerrado',encerradoEm:h,parcelas:ps,devolucao:dev}));return}
+  if(a==='excluir'){ui.confirm=null;await act(id,()=>ref.delete());return}
+});
+const keepDv=e=>{if(ui.confirm&&e.target.id&&e.target.id.startsWith('dv_'))(ui.confirm.vals||(ui.confirm.vals={}))[e.target.id]=e.target.value};
+$('#pagBody').addEventListener('input',keepDv);$('#pagBody').addEventListener('change',keepDv);
+function showView(v){$('#viewNovo').hidden=v!=='novo';$('#viewPag').hidden=v!=='pag';$('#vNovo').setAttribute('aria-selected',v==='novo');$('#vPag').setAttribute('aria-selected',v==='pag');if(v==='pag')renderPag()}
+$('#vNovo').onclick=()=>showView('novo');$('#vPag').onclick=()=>showView('pag');
+
+/* ---------- frota ---------- */
+const KEY_FROTA='gac_frota_v1';
+const VF=['v_modelo','v_ano','v_placa','v_cor','v_comb','v_renavam','v_chassi','v_valor'];
+const FROTA_INICIAL=[{v_modelo:'Chevrolet Corsa 1.4',v_ano:'2012/2012',v_placa:'AUC3C73',v_cor:'Preta',v_comb:'Flex (álcool/gasolina)',v_renavam:'',v_chassi:'',v_valor:''}];
+let frotaCache=null;
+async function loadConfig(){try{
+  const l=await db.doc('config/locador').get();if(l.exists){const d=l.data();LD_FIELDS.forEach(id=>{if(d[id])$('#'+id).value=d[id]});render()}
+  else{const o={};LD_FIELDS.forEach(k=>o[k]=val(k));if(o.ld_nome)await db.doc('config/locador').set(o)}
+  const f=await db.doc('config/frota').get();const li=f.exists?f.data().lista:null;
+  if(Array.isArray(li)&&li.length){frotaCache=cloneJ(li);renderFrota()}else await db.doc('config/frota').set({lista:getFrota()});
+}catch(e){}}
+let ldTimer;LD_FIELDS.forEach(id=>$('#'+id).addEventListener('input',()=>{clearTimeout(ldTimer);ldTimer=setTimeout(()=>{if(!db)return;const o={};LD_FIELDS.forEach(k=>o[k]=val(k));db.doc('config/locador').set(o).catch(()=>{})},1500)}));
+function getFrota(){if(frotaCache)return cloneJ(frotaCache);try{const f=JSON.parse(localStorage.getItem(KEY_FROTA)||'null');if(Array.isArray(f)&&f.length)return f}catch(e){}return FROTA_INICIAL.map(v=>({...v}))}
+function setFrota(f){frotaCache=cloneJ(f);try{localStorage.setItem(KEY_FROTA,JSON.stringify(f))}catch(e){}if(db)db.doc('config/frota').set({lista:f}).catch(()=>{})}
+function renderFrota(){
+  const f=getFrota(),cur=val('v_placa').toUpperCase();
+  $('#fleet').innerHTML=f.map((v,i)=>`<button type="button" class="vcard" data-i="${i}" aria-pressed="${v.v_placa.toUpperCase()===cur}"><span class="mini">${esc(v.v_placa.toUpperCase())}</span><b>${esc(v.v_modelo)}</b><small>${esc(v.v_cor)} · ${esc(v.v_ano)}</small></button>`).join('')+`<button type="button" class="vcard add" id="addV">+ Cadastrar veículo</button>`;
+  $$('#fleet .vcard[data-i]').forEach(b=>b.onclick=()=>{const v=getFrota()[+b.dataset.i];VF.forEach(id=>$('#'+id).value=v[id]||'');$('#vStatus').textContent='';render();renderFrota()});
+  $('#addV').onclick=()=>{VF.forEach(id=>$('#'+id).value='');$('#v_comb').value='Flex (álcool/gasolina)';$('#vStatus').className='status';$('#vStatus').textContent='Preencha os dados e toque em Salvar na frota.';render();renderFrota();$('#v_modelo').focus()};
+}
+$('#btnSalvarV').onclick=()=>{
+  const st=$('#vStatus');if(!val('v_placa')||!val('v_modelo')){st.className='status err';st.textContent='Informe pelo menos modelo e placa.';return}
+  const v={};VF.forEach(id=>v[id]=val(id));v.v_placa=v.v_placa.toUpperCase();
+  const f=getFrota(),i=f.findIndex(x=>x.v_placa.toUpperCase()===v.v_placa);
+  if(i>=0)f[i]=v;else f.push(v);setFrota(f);
+  st.className='status ok';st.textContent=i>=0?'Veículo atualizado na frota.':'Veículo cadastrado na frota.';renderFrota();
+};
+$('#v_placa').addEventListener('input',renderFrota);
+
+/* ---------- acessos ---------- */
+async function loadMembros(){const{data,error}=await sb.from('membros').select('email').order('criado_em');
+  $('#membrosList').innerHTML=error?'<li>Não foi possível carregar.</li>':data.map(m=>`<li>${esc(m.email)}</li>`).join('')}
+$('#mbAdd').onclick=async()=>{const e=$('#mb_email').value.trim().toLowerCase(),st=$('#mbStatus');
+  if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e)){st.className='status err';st.textContent='Digite um e-mail válido.';return}
+  const{error}=await sb.from('membros').upsert({email:e});
+  if(error){st.className='status err';st.textContent='Não foi possível autorizar ('+error.message+').';return}
+  st.className='status ok';st.textContent=e+' autorizado.';$('#mb_email').value='';loadMembros()};
+
+/* ---------- login ---------- */
+let started=false;
+function showApp(session){
+  $('#loginBox').hidden=true;$('#app').hidden=false;$('#acctEmail').textContent=session.user.email;
+  if(!started){started=true;startDb();setTimeout(sizePads,50)}
+}
+function showLogin(msg){$('#app').hidden=true;$('#loginBox').hidden=false;if(msg){$('#lgStatus').className='status err';$('#lgStatus').textContent=msg}}
+const traduz=m=>/Invalid login/i.test(m)?'E-mail ou senha incorretos.':/already registered|already exists/i.test(m)?'Esse e-mail já tem senha. Use Entrar.':/não autorizado|Database error saving new user/i.test(m)?'Esse e-mail não está autorizado. Peça para quem administra o app autorizar.':/Password should be/i.test(m)?'A senha precisa ter pelo menos 6 caracteres.':m;
+$('#loginForm').addEventListener('submit',async e=>{e.preventDefault();const st=$('#lgStatus');st.className='status';st.textContent='Entrando…';
+  const{data,error}=await sb.auth.signInWithPassword({email:$('#lg_email').value.trim().toLowerCase(),password:$('#lg_senha').value});
+  if(error){st.className='status err';st.textContent=traduz(error.message);return}st.textContent='';showApp(data.session)});
+$('#lgCriar').onclick=async()=>{const st=$('#lgStatus'),email=$('#lg_email').value.trim().toLowerCase(),pw=$('#lg_senha').value;
+  if(!email||pw.length<6){st.className='status err';st.textContent='Digite seu e-mail e uma senha de pelo menos 6 caracteres, depois toque aqui de novo.';return}
+  st.className='status';st.textContent='Criando acesso…';
+  const r=await sb.auth.signUp({email,password:pw});
+  if(r.error){st.className='status err';st.textContent=traduz(r.error.message);return}
+  const{data,error}=await sb.auth.signInWithPassword({email,password:pw});
+  if(error){st.className='status err';st.textContent=traduz(error.message);return}st.textContent='';showApp(data.session)};
+$('#btnSair').onclick=async()=>{await sb.auth.signOut();location.reload()};
+
+/* ---------- início ---------- */
+(function init(){
+  const t=new Date(),iso=d=>d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
+  $('#d_ini').value=iso(t);$('#p_1venc').value=iso(t);
+  const f=new Date(t);f.setMonth(f.getMonth()+1);$('#d_fim').value=iso(f);
+  loadDraft();render();renderFrota();go(0);
+  sb.auth.getSession().then(({data})=>{if(data.session)showApp(data.session);else showLogin()});
+})();
+</script>
+</body>
+</html>
